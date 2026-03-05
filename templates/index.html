@@ -135,6 +135,7 @@
 const el = (id) => document.getElementById(id);
 
 const ITEM_ICON_BASE = "https://play.pokemonshowdown.com/sprites/itemicons/";
+const BULBA_FILEPATH_BASE = "https://archives.bulbagarden.net/wiki/Special:FilePath/";
 const ANI_BASE = "https://play.pokemonshowdown.com/sprites/ani/";
 const TYPE_ICON_BASE = "https://cdn.jsdelivr.net/gh/partywhale/pokemon-type-icons@main/icons/";
 
@@ -174,15 +175,32 @@ function itemSlug(s) {
     .replace(/^\-+|\-+$/g, "");
 }
 function itemToId(s) { return (s ?? "").toString().toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+function itemWikiToken(s) {
+  const t = (s ?? "").toString().normalize("NFKD").trim();
+  const n = t
+    .replace(/[’']/g, "")
+    .replace(/[.:]/g, "")
+    .replace(/\s*\(.*?\)\s*/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/[^A-Za-z0-9_\-]/g, "");
+  return n.replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+}
 function setItemIcon(img, itemName) {
   const slug = itemSlug(itemName);
   const tid  = itemToId(itemName);
-  const tries = [
+  const wiki = itemWikiToken(itemName);
+  const tries = [];
+  if (wiki) {
+    tries.push(`${BULBA_FILEPATH_BASE}Bag_${wiki}_SV_Sprite.png`);
+    tries.push(`${BULBA_FILEPATH_BASE}Bag_${wiki}_Sprite.png`);
+    tries.push(`${BULBA_FILEPATH_BASE}${wiki}.png`);
+  }
+  tries.push(
     `${ITEM_ICON_BASE}${slug}.png`,
     `${ITEM_ICON_BASE}${slug}.gif`,
     `${ITEM_ICON_BASE}${tid}.png`,
     `${ITEM_ICON_BASE}${tid}.gif`,
-  ];
+  );
   img.dataset.tries = JSON.stringify(tries);
   img.src = tries[0];
   img.onerror = function() {
