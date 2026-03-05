@@ -789,7 +789,7 @@ async function loadDetail(key, nameHint) {
       const u = Number(x.uses) || 0;
       const p = (100 * u / movesTot);
       return `<div class="listLine">
-        <div>${escapeHtml(x.move)}</div>
+        <div class="moveWithType"><span>${escapeHtml(x.move)}</span>${typeIconsHtml([x.type || "Unknown"])}</div>
         <div class="mono">${u} <span class="muted">(${fmtPct1(p)})</span></div>
       </div>`;
     }).join("");

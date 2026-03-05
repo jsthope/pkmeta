@@ -24,6 +24,10 @@ POKEDEX_URLS = (
     "https://play.pokemonshowdown.com/data/pokedex.json",
     "https://raw.githubusercontent.com/smogon/pokemon-showdown/master/data/pokedex.json",
 )
+MOVES_URLS = (
+    "https://play.pokemonshowdown.com/data/moves.json",
+    "https://raw.githubusercontent.com/smogon/pokemon-showdown/master/data/moves.json",
+)
 _TOID_RE = re.compile(r"[^a-z0-9]+")
 _TYPE_ORDER = [
     "Normal", "Fire", "Water", "Electric", "Grass", "Ice", "Fighting", "Poison", "Ground",
@@ -31,6 +35,7 @@ _TYPE_ORDER = [
 ]
 _TYPE_ORDER_INDEX = {t: i for i, t in enumerate(_TYPE_ORDER)}
 _POKEDEX_TYPE_CACHE: Dict[str, List[str]] | None = None
+_MOVE_TYPE_CACHE: Dict[str, str] | None = None
 
 
 # Sprite URL helpers
@@ -186,6 +191,50 @@ def load_pokedex_type_map(local_json_path: str = "") -> Dict[str, List[str]]:
                 out[nid] = types
 
     _POKEDEX_TYPE_CACHE = out
+    return out
+
+
+def load_move_type_map(local_json_path: str = "") -> Dict[str, str]:
+    global _MOVE_TYPE_CACHE
+    if _MOVE_TYPE_CACHE is not None:
+        return _MOVE_TYPE_CACHE
+
+    data: Any = None
+
+    if local_json_path:
+        try:
+            with open(local_json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+
+    if data is None:
+        for url in MOVES_URLS:
+            try:
+                data = _read_json_url(url)
+                break
+            except Exception:
+                data = None
+
+    out: Dict[str, str] = {}
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if not isinstance(v, dict):
+                continue
+            mtype = _normalize_type(str(v.get("type") or ""))
+            if not mtype:
+                continue
+
+            kid = _to_id(str(k))
+            if kid:
+                out[kid] = mtype
+
+            nm = str(v.get("name") or "")
+            nid = _to_id(nm)
+            if nid and nid not in out:
+                out[nid] = mtype
+
+    _MOVE_TYPE_CACHE = out
     return out
 
 
@@ -612,6 +661,7 @@ def make_app(
         ).fetchall()
 
         conn.close()
+        move_type_map = load_move_type_map(os.environ.get("PKMETA_MOVES_JSON", ""))
 
         def kname(k: str) -> str:
             return name_map.get(k, k)
@@ -662,7 +712,14 @@ def make_app(
                 "series": {"days": days, "popularity": pops},
                 "mates": mates_payload,
                 "counters": counters_payload,
-                "moves": [{"move": str(r["move"]), "uses": int(r["uses"])} for r in moves_rows],
+                "moves": [
+                    {
+                        "move": str(r["move"]),
+                        "uses": int(r["uses"]),
+                        "type": move_type_map.get(_to_id(str(r["move"])), "Unknown"),
+                    }
+                    for r in moves_rows
+                ],
                 "items": [{"item": str(r["item"]), "uses": int(r["uses"])} for r in items_rows],
                 "min_pair_games": min_pair_games,
                 "min_vs_games": min_vs_games,

@@ -379,6 +379,12 @@ input:focus, select:focus{
   gap: 4px;
 }
 
+.moveWithType{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .pokeNameLine .typeIcons{
   gap: 2px;
 }
