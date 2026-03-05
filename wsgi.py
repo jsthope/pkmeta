@@ -9,4 +9,5 @@ from app import make_app
 
 
 DB_PATH = os.environ.get("PKMETA_DB", "stats.sqlite")
-app = make_app(DB_PATH)
+ATTACKS_DB_PATH = os.environ.get("PKMETA_ATTACKS_DB", "attacks.sqlite")
+app = make_app(DB_PATH, attacks_db_path=ATTACKS_DB_PATH)

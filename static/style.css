@@ -305,6 +305,135 @@ input:focus, select:focus{
   box-shadow: var(--shadow);
 }
 
+.tabsRow{
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tabs{
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.03);
+}
+
+.typeFilter{
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.03);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.typeBtn{
+  height: 30px;
+  min-width: 30px;
+  padding: 0 4px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.typeBtn img{
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.typeIcons{
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.typeIcons img{
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.attackNameWrap{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pokeNameLine{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pokeNameLine .typeIcons{
+  gap: 2px;
+}
+
+.pokeNameLine .typeIcons img{
+  width: 18px;
+  height: 18px;
+}
+
+.typeBtn:hover{
+  background: rgba(255,255,255,.05);
+  border-color: var(--stroke2);
+}
+
+.typeBtn.isActive{
+  border-color: var(--stroke2);
+  background: rgba(120,170,255,.16);
+}
+
+@media (max-width: 980px){
+  .tabsRow{
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .typeFilter{
+    justify-content: flex-start;
+  }
+}
+
+.tabBtn{
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.tabBtn:hover{
+  background: rgba(255,255,255,.05);
+  color: var(--text);
+}
+
+.tabBtn.isActive{
+  color: var(--text);
+  border-color: var(--stroke2);
+  background: rgba(120,170,255,.16);
+}
+
+.tabPanel{ display: none; }
+.tabPanel.isActive{ display: block; }
+.isHidden{ display: none !important; }
+
 table{
   width: 100%;
   border-collapse: collapse;

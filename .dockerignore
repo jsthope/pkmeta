@@ -12,3 +12,5 @@ venv
 env
 dist
 build
+metamon-raw-replay
+metamon-raw-replays

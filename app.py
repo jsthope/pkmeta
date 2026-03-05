@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
+import os
 import re
 import sqlite3
 import unicodedata
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
+from urllib.request import Request, urlopen
 
 from flask import Flask, Response, jsonify, redirect, render_template, request
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -16,6 +19,18 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 SPRITE_HOME = "https://play.pokemonshowdown.com/sprites/home/"
 SPRITE_GEN5 = "https://play.pokemonshowdown.com/sprites/gen5/"
 SPRITE_ANI  = "https://play.pokemonshowdown.com/sprites/ani/"
+
+POKEDEX_URLS = (
+    "https://play.pokemonshowdown.com/data/pokedex.json",
+    "https://raw.githubusercontent.com/smogon/pokemon-showdown/master/data/pokedex.json",
+)
+_TOID_RE = re.compile(r"[^a-z0-9]+")
+_TYPE_ORDER = [
+    "Normal", "Fire", "Water", "Electric", "Grass", "Ice", "Fighting", "Poison", "Ground",
+    "Flying", "Psychic", "Bug", "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy", "Unknown",
+]
+_TYPE_ORDER_INDEX = {t: i for i, t in enumerate(_TYPE_ORDER)}
+_POKEDEX_TYPE_CACHE: Dict[str, List[str]] | None = None
 
 
 # Sprite URL helpers
@@ -101,9 +116,87 @@ def clamp_int(x: Any, lo: int, hi: int) -> int:
     return max(lo, min(hi, v))
 
 
+def _to_id(s: str) -> str:
+    return _TOID_RE.sub("", (s or "").lower())
+
+
+def _normalize_type(t: str) -> str:
+    tt = (t or "").strip()
+    if not tt:
+        return ""
+    return tt[0].upper() + tt[1:].lower()
+
+
+def _parse_types_param(raw: str) -> Set[str]:
+    out: Set[str] = set()
+    for x in (raw or "").split(","):
+        t = _normalize_type(x)
+        if t:
+            out.add(t)
+    return out
+
+
+def _read_json_url(url: str) -> Any:
+    req = Request(url, headers={"User-Agent": "pkmeta/1.0"})
+    with urlopen(req, timeout=20) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def load_pokedex_type_map(local_json_path: str = "") -> Dict[str, List[str]]:
+    global _POKEDEX_TYPE_CACHE
+    if _POKEDEX_TYPE_CACHE is not None:
+        return _POKEDEX_TYPE_CACHE
+
+    data: Any = None
+
+    if local_json_path:
+        try:
+            with open(local_json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+
+    if data is None:
+        for url in POKEDEX_URLS:
+            try:
+                data = _read_json_url(url)
+                break
+            except Exception:
+                data = None
+
+    out: Dict[str, List[str]] = {}
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if not isinstance(v, dict):
+                continue
+            types_raw = v.get("types")
+            if not isinstance(types_raw, list):
+                continue
+            types = [_normalize_type(str(t)) for t in types_raw if _normalize_type(str(t))]
+            if not types:
+                continue
+
+            kid = _to_id(str(k))
+            if kid:
+                out[kid] = types
+
+            nm = str(v.get("name") or "")
+            nid = _to_id(nm)
+            if nid and nid not in out:
+                out[nid] = types
+
+    _POKEDEX_TYPE_CACHE = out
+    return out
+
+
 # Flask app
 
-def make_app(db_path: str, min_pair_games_default: int = 3000, min_vs_games_default: int = 3000) -> Flask:
+def make_app(
+    db_path: str,
+    attacks_db_path: str = "attacks.sqlite",
+    min_pair_games_default: int = 3000,
+    min_vs_games_default: int = 3000,
+) -> Flask:
     app = Flask(__name__)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
@@ -177,10 +270,67 @@ def make_app(db_path: str, min_pair_games_default: int = 3000, min_vs_games_defa
         mx = int(row["mx"] if row and row["mx"] is not None else 2000)
         return jsonify({"min": mn, "max": mx, "step": 100})
 
+    @app.get("/api/types")
+    def api_types():
+        formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
+        elo_max = clamp_int(request.args.get("elo_max", 10000), 0, 10000)
+        if elo_min > elo_max:
+            elo_min, elo_max = elo_max, elo_min
+
+        type_counts: Dict[str, int] = {}
+        poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+
+        conn = get_conn(db_path)
+        rows = conn.execute(
+            """
+            SELECT key, SUM(games) AS games
+            FROM pokemon_bucket
+            WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
+            GROUP BY key
+            """,
+            (formatid, elo_min, elo_max),
+        ).fetchall()
+        conn.close()
+
+        for r in rows:
+            games = int(r["games"])
+            types = poke_type_map.get(str(r["key"]), [])
+            for t in types:
+                type_counts[t] = type_counts.get(t, 0) + games
+
+        conn2 = get_conn(attacks_db_path)
+        try:
+            rows2 = conn2.execute(
+                """
+                SELECT move_type, SUM(games) AS games
+                FROM move_bucket
+                WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
+                GROUP BY move_type
+                """,
+                (formatid, elo_min, elo_max),
+            ).fetchall()
+            for r in rows2:
+                t = _normalize_type(str(r["move_type"]))
+                if not t:
+                    continue
+                type_counts[t] = type_counts.get(t, 0) + int(r["games"])
+        except sqlite3.OperationalError:
+            pass
+        finally:
+            conn2.close()
+
+        types_sorted = sorted(
+            type_counts.items(),
+            key=lambda kv: (-kv[1], _TYPE_ORDER_INDEX.get(kv[0], 999), kv[0]),
+        )
+        return jsonify({"types": [t for t, _ in types_sorted]})
+
     @app.get("/api/pokemon")
     def api_pokemon():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
         q = (request.args.get("q", "") or "").strip().lower()
+        selected_types = _parse_types_param(request.args.get("types", "") or "")
         sort = (request.args.get("sort", "winrate") or "winrate").strip()
         order = (request.args.get("order", "desc") or "desc").strip().lower()
         min_games = clamp_int(request.args.get("min_games", 5000), 0, 10_000_000)
@@ -230,6 +380,7 @@ def make_app(db_path: str, min_pair_games_default: int = 3000, min_vs_games_defa
         ).fetchall()
 
         conn.close()
+        poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
 
         items: List[Dict[str, Any]] = []
         for r in rows:
@@ -255,6 +406,9 @@ def make_app(db_path: str, min_pair_games_default: int = 3000, min_vs_games_defa
 
             key = str(r["key"])
             name = str(r["name"])
+            ptypes = poke_type_map.get(key, [])
+            if selected_types and not selected_types.intersection(ptypes):
+                continue
 
             items.append(
                 {
@@ -269,6 +423,7 @@ def make_app(db_path: str, min_pair_games_default: int = 3000, min_vs_games_defa
                     "kd": kd,
                     "dmg_dealt": dmg_dealt,
                     "dmg_taken": dmg_taken,
+                    "types": ptypes,
                     "sprite_urls": sprite_urls(key, name),
                 }
             )
@@ -291,6 +446,8 @@ def make_app(db_path: str, min_pair_games_default: int = 3000, min_vs_games_defa
             items.sort(key=lambda x: x["dmg_taken"], reverse=reverse)
         elif sort == "name":
             items.sort(key=lambda x: x["name"].lower(), reverse=reverse)
+        elif sort == "types":
+            items.sort(key=lambda x: "/".join(x.get("types", [])).lower(), reverse=reverse)
         else:
             items.sort(key=lambda x: x["winrate"], reverse=reverse)
 
@@ -512,17 +669,153 @@ def make_app(db_path: str, min_pair_games_default: int = 3000, min_vs_games_defa
             }
         )
 
+    @app.get("/api/attack_types")
+    def api_attack_types():
+        formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
+        elo_max = clamp_int(request.args.get("elo_max", 10000), 0, 10000)
+        if elo_min > elo_max:
+            elo_min, elo_max = elo_max, elo_min
+
+        conn = get_conn(attacks_db_path)
+        try:
+            rows = conn.execute(
+                """
+                SELECT move_type, SUM(games) AS games
+                FROM move_bucket
+                WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
+                GROUP BY move_type
+                ORDER BY games DESC, move_type ASC
+                """,
+                (formatid, elo_min, elo_max),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            conn.close()
+            return jsonify({"types": []})
+
+        conn.close()
+        types = [str(r["move_type"]) for r in rows if r["move_type"] is not None]
+        return jsonify({"types": types})
+
+    @app.get("/api/attacks")
+    def api_attacks():
+        formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        q = (request.args.get("q", "") or "").strip().lower()
+        selected_types = _parse_types_param(request.args.get("types", "") or request.args.get("type", "") or "")
+        sort = (request.args.get("sort", "winrate") or "winrate").strip().lower()
+        order = (request.args.get("order", "desc") or "desc").strip().lower()
+        min_games = clamp_int(request.args.get("min_games", 2000), 0, 10_000_000)
+        limit = clamp_int(request.args.get("limit", 200), 10, 2000)
+
+        elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
+        elo_max = clamp_int(request.args.get("elo_max", 10000), 0, 10000)
+        if elo_min > elo_max:
+            elo_min, elo_max = elo_max, elo_min
+
+        conn = get_conn(attacks_db_path)
+        try:
+            matches_row = conn.execute(
+                "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
+                (formatid, elo_min, elo_max),
+            ).fetchone()
+
+            q_sql = """
+            SELECT
+              move_id,
+              MIN(move_name) AS move_name,
+              MIN(move_type) AS move_type,
+              SUM(games) AS games,
+              SUM(wins) AS wins,
+              SUM(uses) AS uses,
+              SUM(sum_elo) AS sum_elo
+            FROM move_bucket
+            WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
+            """
+            params: List[Any] = [formatid, elo_min, elo_max]
+            if selected_types:
+                qs = ",".join("?" for _ in selected_types)
+                q_sql += f" AND move_type IN ({qs})"
+                params.extend(sorted(selected_types))
+            q_sql += " GROUP BY move_id HAVING SUM(games) >= ?"
+            params.append(min_games)
+
+            rows = conn.execute(q_sql, params).fetchall()
+        except sqlite3.OperationalError:
+            conn.close()
+            return jsonify(
+                {
+                    "formatid": formatid,
+                    "elo_min": elo_min,
+                    "elo_max": elo_max,
+                    "items": [],
+                    "meta": {"matches": 0},
+                }
+            )
+
+        conn.close()
+
+        matches = int(matches_row["m"]) if matches_row else 0
+        items: List[Dict[str, Any]] = []
+        for r in rows:
+            games = int(r["games"])
+            wins = int(r["wins"])
+            uses = int(r["uses"])
+            sum_elo = int(r["sum_elo"])
+            move_name = str(r["move_name"])
+            move_id = str(r["move_id"])
+
+            if q and q not in move_name.lower() and q not in move_id.lower():
+                continue
+
+            items.append(
+                {
+                    "move_id": move_id,
+                    "move_name": move_name,
+                    "move_type": str(r["move_type"]),
+                    "games": games,
+                    "wins": wins,
+                    "uses": uses,
+                    "winrate": (wins / games) if games else 0.0,
+                    "avg_elo": (sum_elo / games) if games else 0.0,
+                }
+            )
+
+        reverse = (order != "asc")
+        if sort == "uses":
+            items.sort(key=lambda x: x["uses"], reverse=reverse)
+        elif sort == "games":
+            items.sort(key=lambda x: x["games"], reverse=reverse)
+        elif sort == "avg_elo":
+            items.sort(key=lambda x: x["avg_elo"], reverse=reverse)
+        elif sort == "type":
+            items.sort(key=lambda x: x["move_type"].lower(), reverse=reverse)
+        elif sort == "move":
+            items.sort(key=lambda x: x["move_name"].lower(), reverse=reverse)
+        else:
+            items.sort(key=lambda x: x["winrate"], reverse=reverse)
+
+        return jsonify(
+            {
+                "formatid": formatid,
+                "elo_min": elo_min,
+                "elo_max": elo_max,
+                "items": items[:limit],
+                "meta": {"matches": matches},
+            }
+        )
+
     return app
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default="stats.sqlite")
+    ap.add_argument("--attacks_db", default="attacks.sqlite")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     args = ap.parse_args()
 
-    app = make_app(args.db)
+    app = make_app(args.db, attacks_db_path=args.attacks_db)
     app.run(host=args.host, port=args.port, debug=False)
 
 

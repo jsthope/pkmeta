@@ -72,23 +72,50 @@
       </div>
     </div>
 
-    <div class="tableWrap">
-      <table>
-        <thead>
-          <tr>
-            <th data-sort="name">Pokemon <span class="sortInd"></span></th>
-            <th data-sort="winrate">Winrate <span class="sortInd"></span></th>
-            <th data-sort="games">Games<span class="sortInd"></span></th>
-            <th data-sort="popularity">Popularity <span class="sortInd"></span></th>
-            <th data-sort="lead_rate">Lead rate<span class="sortInd"></span></th>
-            <th data-sort="kd">K/D <span class="sortInd"></span></th>
-            <th data-sort="dmg_dealt">Dmg dealt %<span class="sortInd"></span></th>
-            <th data-sort="dmg_taken">Dmg taken %<span class="sortInd"></span></th>
-            <th data-sort="avg_elo">Avg ELO <span class="sortInd"></span></th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
+    <div class="tabsRow">
+      <div class="tabs" role="tablist" aria-label="Stats views">
+        <button id="tab_pokemon" class="tabBtn isActive" role="tab" aria-selected="true">Pokemon</button>
+        <button id="tab_attacks" class="tabBtn" role="tab" aria-selected="false">Attacks</button>
+      </div>
+      <div id="type_filter_wrap" class="typeFilter" aria-label="Type filter"></div>
+    </div>
+
+    <div id="panel_pokemon" class="tabPanel isActive">
+      <div class="tableWrap">
+        <table>
+          <thead id="pokemonHead">
+            <tr>
+              <th data-sort="name">Pokemon <span class="sortInd"></span></th>
+              <th data-sort="winrate">Winrate <span class="sortInd"></span></th>
+              <th data-sort="games">Games<span class="sortInd"></span></th>
+              <th data-sort="popularity">Popularity <span class="sortInd"></span></th>
+              <th data-sort="lead_rate">Lead rate<span class="sortInd"></span></th>
+              <th data-sort="kd">K/D <span class="sortInd"></span></th>
+              <th data-sort="dmg_dealt">Dmg dealt %<span class="sortInd"></span></th>
+              <th data-sort="dmg_taken">Dmg taken %<span class="sortInd"></span></th>
+              <th data-sort="avg_elo">Avg ELO <span class="sortInd"></span></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="panel_attacks" class="tabPanel">
+      <div class="tableWrap">
+        <table>
+          <thead id="attackHead">
+            <tr>
+              <th data-attack-sort="move">Attack <span class="sortInd"></span></th>
+              <th data-attack-sort="winrate">Winrate <span class="sortInd"></span></th>
+              <th data-attack-sort="games">Games <span class="sortInd"></span></th>
+              <th data-attack-sort="uses">Uses <span class="sortInd"></span></th>
+              <th data-attack-sort="avg_elo">Avg ELO <span class="sortInd"></span></th>
+            </tr>
+          </thead>
+          <tbody id="attack_rows"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -109,6 +136,7 @@ const el = (id) => document.getElementById(id);
 
 const ITEM_ICON_BASE = "https://play.pokemonshowdown.com/sprites/itemicons/";
 const ANI_BASE = "https://play.pokemonshowdown.com/sprites/ani/";
+const TYPE_ICON_BASE = "https://cdn.jsdelivr.net/gh/partywhale/pokemon-type-icons@main/icons/";
 
 function fmtPct(x) { return (100*x).toFixed(1) + "%"; }
 function fmt1(x) { return (Number(x) || 0).toFixed(1); }
@@ -177,11 +205,14 @@ function preferAniFirst(spriteUrls) {
   return anis.concat(rest);
 }
 
-const debouncedLoadList = (() => {
+const debouncedLoadAll = (() => {
   let t = null;
   return () => {
     if (t) clearTimeout(t);
-    t = setTimeout(loadList, 140);
+    t = setTimeout(() => {
+      loadList();
+      loadAttacks();
+    }, 140);
   };
 })();
 
@@ -190,12 +221,105 @@ const sortState = {
   order: "desc",
 };
 
+const attackSortState = {
+  key: "winrate",
+  order: "desc",
+};
+
+const typeFilterState = {
+  selected: [],
+};
+
+let activeView = "pokemon";
+
+function setView(view) {
+  activeView = (view === "attacks") ? "attacks" : "pokemon";
+
+  const isPokemon = activeView === "pokemon";
+  el("tab_pokemon").classList.toggle("isActive", isPokemon);
+  el("tab_attacks").classList.toggle("isActive", !isPokemon);
+  el("tab_pokemon").setAttribute("aria-selected", isPokemon ? "true" : "false");
+  el("tab_attacks").setAttribute("aria-selected", isPokemon ? "false" : "true");
+
+  el("panel_pokemon").classList.toggle("isActive", isPokemon);
+  el("panel_attacks").classList.toggle("isActive", !isPokemon);
+}
+
+function typeIconUrl(typeName) {
+  const slug = (typeName || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `${TYPE_ICON_BASE}${slug}.svg`;
+}
+
+function updateTypeButtonsUI() {
+  const selectedSet = new Set(typeFilterState.selected);
+  document.querySelectorAll("#type_filter_wrap .typeBtn").forEach(btn => {
+    const t = btn.dataset.type || "";
+    const isActive = t === "" ? (selectedSet.size === 0) : selectedSet.has(t);
+    btn.classList.toggle("isActive", isActive);
+    btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+}
+
+function setTypeFilter(typeName) {
+  const t = (typeName || "").trim();
+  if (!t) {
+    typeFilterState.selected = [];
+  } else {
+    const set = new Set(typeFilterState.selected);
+    if (set.has(t)) set.delete(t);
+    else set.add(t);
+    typeFilterState.selected = Array.from(set);
+  }
+  updateTypeButtonsUI();
+  loadList();
+  loadAttacks();
+}
+
+function renderTypeButtons(types) {
+  const wrap = el("type_filter_wrap");
+  wrap.innerHTML = "";
+
+  const mkBtn = (label, typeName) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "typeBtn";
+    btn.dataset.type = typeName;
+    btn.title = label;
+    btn.setAttribute("aria-label", label);
+
+    if (typeName) {
+      const img = document.createElement("img");
+      img.alt = label;
+      img.src = typeIconUrl(typeName);
+      img.onerror = function() {
+        this.style.display = "none";
+      };
+      btn.appendChild(img);
+    } else {
+      btn.textContent = "All";
+    }
+
+    btn.addEventListener("click", () => setTypeFilter(typeName));
+    return btn;
+  };
+
+  wrap.appendChild(mkBtn("All types", ""));
+  for (const t of types || []) {
+    wrap.appendChild(mkBtn(t, t));
+  }
+  updateTypeButtonsUI();
+}
+
 function defaultOrderForKey(k){
   return (k === "name") ? "asc" : "desc";
 }
 
+function defaultOrderForAttack(k){
+  return (k === "move" || k === "type") ? "asc" : "desc";
+}
+
 function updateSortIndicators(){
-  document.querySelectorAll('thead th[data-sort]').forEach(th => {
+  document.querySelectorAll('#pokemonHead th[data-sort]').forEach(th => {
     const k = th.dataset.sort;
     const ind = th.querySelector(".sortInd");
     th.classList.remove("isActive");
@@ -206,6 +330,24 @@ function updateSortIndicators(){
       const arrow = (sortState.order === "asc") ? "▲" : "▼";
       if (ind) ind.textContent = arrow;
       th.setAttribute("aria-sort", sortState.order === "asc" ? "ascending" : "descending");
+    } else {
+      if (ind) ind.textContent = "";
+    }
+  });
+}
+
+function updateAttackSortIndicators(){
+  document.querySelectorAll('#attackHead th[data-attack-sort]').forEach(th => {
+    const k = th.dataset.attackSort;
+    const ind = th.querySelector(".sortInd");
+    th.classList.remove("isActive");
+    th.removeAttribute("aria-sort");
+
+    if (k === attackSortState.key){
+      th.classList.add("isActive");
+      const arrow = (attackSortState.order === "asc") ? "▲" : "▼";
+      if (ind) ind.textContent = arrow;
+      th.setAttribute("aria-sort", attackSortState.order === "asc" ? "ascending" : "descending");
     } else {
       if (ind) ind.textContent = "";
     }
@@ -223,6 +365,17 @@ function setSort(k){
   loadList();
 }
 
+function setAttackSort(k){
+  if (attackSortState.key === k){
+    attackSortState.order = (attackSortState.order === "asc") ? "desc" : "asc";
+  } else {
+    attackSortState.key = k;
+    attackSortState.order = defaultOrderForAttack(k);
+  }
+  updateAttackSortIndicators();
+  loadAttacks();
+}
+
 function getFilters() {
   const formatid = el("formatid").value;
   const q = el("q").value.trim();
@@ -232,8 +385,22 @@ function getFilters() {
   let elo_min = parseInt(el("elo_min").value || "0", 10);
   let elo_max = parseInt(el("elo_max").value || "0", 10);
   if (elo_min > elo_max) { const t = elo_min; elo_min = elo_max; elo_max = t; }
+  const selectedTypes = Array.isArray(typeFilterState.selected) ? typeFilterState.selected.slice() : [];
 
-  return { formatid, q, sort: sortState.key, order: sortState.order, min_games, limit, elo_min, elo_max };
+  return {
+    formatid,
+    q,
+    sort: sortState.key,
+    order: sortState.order,
+    min_games,
+    selected_types: selectedTypes,
+    types_csv: selectedTypes.join(","),
+    attack_sort: attackSortState.key,
+    attack_order: attackSortState.order,
+    limit,
+    elo_min,
+    elo_max,
+  };
 }
 
 function updateEloUI(changed) {
@@ -313,6 +480,78 @@ async function initEloBounds() {
   updateEloUI();
 }
 
+async function initTypeFilters() {
+  const f = getFilters();
+  const params = new URLSearchParams({
+    formatid: f.formatid,
+    elo_min: f.elo_min.toString(),
+    elo_max: f.elo_max.toString(),
+  });
+  const res = await fetch("/api/types?" + params.toString());
+  const data = await res.json();
+
+  const types = Array.isArray(data.types) ? data.types : [];
+  if (typeFilterState.selected.length) {
+    typeFilterState.selected = typeFilterState.selected.filter(t => types.includes(t));
+  }
+  renderTypeButtons(types);
+}
+
+async function loadAttacks() {
+  const f = getFilters();
+  updateAttackSortIndicators();
+
+  const params = new URLSearchParams({
+    formatid: f.formatid,
+    q: f.q,
+    types: f.types_csv,
+    sort: f.attack_sort,
+    order: f.attack_order,
+    min_games: f.min_games.toString(),
+    limit: f.limit.toString(),
+    elo_min: f.elo_min.toString(),
+    elo_max: f.elo_max.toString(),
+  });
+
+  const res = await fetch("/api/attacks?" + params.toString());
+  const data = await res.json();
+  const items = Array.isArray(data.items) ? data.items : [];
+
+  const tbody = el("attack_rows");
+  tbody.innerHTML = "";
+
+  if (!items.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 5;
+    td.className = "muted";
+    td.textContent = "No attack data found. Build attacks.sqlite from real parquet files (not Git LFS pointers).";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  for (const a of items) {
+    const tr = document.createElement("tr");
+    const td0 = document.createElement("td"); td0.innerHTML = attackNameWithTypeHtml(a.move_name || a.move_id || "-", a.move_type || "Unknown"); tr.appendChild(td0);
+    const td1 = document.createElement("td"); td1.textContent = fmtPct(a.winrate || 0); tr.appendChild(td1);
+    const td2 = document.createElement("td"); td2.textContent = `${a.games || 0}`; tr.appendChild(td2);
+    const td3 = document.createElement("td"); td3.textContent = `${a.uses || 0}`; tr.appendChild(td3);
+    const td4 = document.createElement("td"); td4.textContent = fmt1(a.avg_elo || 0); tr.appendChild(td4);
+    tbody.appendChild(tr);
+  }
+}
+
+function typeIconsHtml(types) {
+  const arr = Array.isArray(types) ? types : [];
+  if (!arr.length) return '<span class="muted">-</span>';
+  return `<div class="typeIcons">${arr.map(t => `<img src="${typeIconUrl(t)}" alt="${escapeHtml(t)}" title="${escapeHtml(t)}"/>`).join("")}</div>`;
+}
+
+function attackNameWithTypeHtml(name, typeName) {
+  return `<div class="attackNameWrap"><span>${escapeHtml(name || "-")}</span>${typeIconsHtml([typeName || "Unknown"])}</div>`;
+}
+
 async function loadList() {
   const f = getFilters();
   updateEloUI();
@@ -325,6 +564,7 @@ async function loadList() {
     sort: "games",
     order: "desc",
     min_games: f.min_games.toString(),
+    types: f.types_csv,
     limit: fetchLimit.toString(),
     elo_min: f.elo_min.toString(),
     elo_max: f.elo_max.toString()
@@ -394,7 +634,7 @@ async function loadList() {
       <div class="poke">
         <img data-srcs='${JSON.stringify(srcs)}' src="${firstSrc}" alt="" />
         <div>
-          <div><b>${escapeHtml(r.name)}</b></div>
+          <div class="pokeNameLine"><b>${escapeHtml(r.name)}</b>${typeIconsHtml(r.types)}</div>
           <div class="muted">${r.games} games • ${r.wins} wins</div>
         </div>
       </div>`;
@@ -577,19 +817,23 @@ async function loadDetail(key, nameHint) {
   }
 }
 
-el("q").addEventListener("input", debouncedLoadList);
-["min_games","limit"].forEach(id => el(id).addEventListener("input", debouncedLoadList));
+el("q").addEventListener("input", debouncedLoadAll);
+["min_games","limit"].forEach(id => el(id).addEventListener("input", debouncedLoadAll));
 
 el("formatid").addEventListener("change", async () => {
   await initEloBounds();
+  await initTypeFilters();
   await loadList();
+  await loadAttacks();
 });
 
-el("elo_min").addEventListener("input", () => { updateEloUI("min"); debouncedLoadList(); });
-el("elo_max").addEventListener("input", () => { updateEloUI("max"); debouncedLoadList(); });
+el("elo_min").addEventListener("input", () => { updateEloUI("min"); debouncedLoadAll(); });
+el("elo_max").addEventListener("input", () => { updateEloUI("max"); debouncedLoadAll(); });
+el("tab_pokemon").addEventListener("click", () => setView("pokemon"));
+el("tab_attacks").addEventListener("click", () => setView("attacks"));
 
 function initSortHeaders(){
-  document.querySelectorAll('thead th[data-sort]').forEach(th => {
+  document.querySelectorAll('#pokemonHead th[data-sort]').forEach(th => {
     th.addEventListener("click", () => setSort(th.dataset.sort));
     th.tabIndex = 0;
     th.addEventListener("keydown", (e) => {
@@ -599,14 +843,30 @@ function initSortHeaders(){
       }
     });
   });
+
+  document.querySelectorAll('#attackHead th[data-attack-sort]').forEach(th => {
+    th.addEventListener("click", () => setAttackSort(th.dataset.attackSort));
+    th.tabIndex = 0;
+    th.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setAttackSort(th.dataset.attackSort);
+      }
+    });
+  });
+
   updateSortIndicators();
+  updateAttackSortIndicators();
 }
 
 (async () => {
   await initFormats();
   await initEloBounds();
+  await initTypeFilters();
   initSortHeaders();
+  setView("pokemon");
   await loadList();
+  await loadAttacks();
 })();
 </script>
 </body>
