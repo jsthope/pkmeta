@@ -1,0 +1,30 @@
+services:
+  pkmeta-net:
+    build:
+      context: ../..
+    container_name: pkmeta-net
+    expose:
+      - "8000"
+    environment:
+      - PKMETA_DB=/app/stats.sqlite
+    volumes:
+      - ../../stats.sqlite:/app/stats.sqlite:ro
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: pkmeta-caddy
+    depends_on:
+      - pkmeta-net
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

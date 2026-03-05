@@ -1,0 +1,12 @@
+services:
+  pkmeta-net:
+    build:
+      context: ../..
+    container_name: pkmeta-net-debug
+    ports:
+      - "8000:8000"
+    environment:
+      - PKMETA_DB=/app/stats.sqlite
+    volumes:
+      - ../../stats.sqlite:/app/stats.sqlite:ro
+    restart: unless-stopped

@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>pkmeta.net - Pokemon Meta, VGC/PvP Stats & Win Rate</title>
+  <meta name="description" content="pkmeta.net: competitive Pokemon stats for meta analysis, win rate, popularity, synergies, counters, and Elo filters."/>
+  <meta name="keywords" content="pkmeta, pokemon, pokemon meta, meta pokemon, pokemon strategy, best pokemon, pvp, vgc, champions, winrate, pokemon stats"/>
+  <meta name="robots" content="index, follow, max-image-preview:large"/>
+  <link rel="canonical" href="https://pkmeta.net/"/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:site_name" content="pkmeta.net"/>
+  <meta property="og:locale" content="en_US"/>
+  <meta property="og:title" content="pkmeta.net - Pokemon Meta, VGC/PvP Stats & Win Rate"/>
+  <meta property="og:description" content="Pokemon meta analysis with win rate, popularity, synergies, and counters for PvP/VGC."/>
+  <meta property="og:url" content="https://pkmeta.net/"/>
+  <meta name="twitter:card" content="summary"/>
+  <meta name="twitter:title" content="pkmeta.net - Pokemon Meta, VGC/PvP Stats & Win Rate"/>
+  <meta name="twitter:description" content="Competitive Pokemon stats: meta, strategy, best picks, win rate, and matchups."/>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "pkmeta.net",
+    "url": "https://pkmeta.net/",
+    "inLanguage": "en",
+    "description": "Competitive Pokemon stats: meta, win rate, popularity, synergies, and counters.",
+    "keywords": "pkmeta, pokemon, meta, strategy, best pokemon, pvp, vgc, champions, winrate"
+  }
+  </script>
+</head>
+<body>
+  <div class="page">
+    <header class="top">
+      <h1>pkmeta.net <span>- Pokemon Stats</span></h1>
+      <div class="topRight">
+        <a class="githubLink" href="https://github.com/jsthope/pkmeta" target="_blank" rel="noopener noreferrer" aria-label="View the GitHub repository">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 0.5C5.37 0.5 0 5.87 0 12.5C0 17.8 3.44 22.29 8.21 23.88C8.81 23.99 9.03 23.63 9.03 23.32C9.03 23.04 9.02 22.28 9.01 21.27C5.67 21.99 4.97 19.83 4.97 19.83C4.42 18.43 3.63 18.05 3.63 18.05C2.55 17.32 3.72 17.33 3.72 17.33C4.92 17.42 5.55 18.56 5.55 18.56C6.62 20.39 8.36 19.86 9.05 19.55C9.16 18.78 9.47 18.25 9.81 17.95C7.14 17.64 4.34 16.61 4.34 12.05C4.34 10.75 4.81 9.69 5.58 8.87C5.45 8.56 5.04 7.31 5.7 5.63C5.7 5.63 6.71 5.31 9 6.86C9.97 6.59 11.01 6.46 12.05 6.46C13.08 6.46 14.12 6.59 15.09 6.86C17.38 5.31 18.39 5.63 18.39 5.63C19.05 7.31 18.64 8.56 18.51 8.87C19.28 9.69 19.75 10.75 19.75 12.05C19.75 16.62 16.94 17.63 14.26 17.94C14.69 18.31 15.08 19.04 15.08 20.16C15.08 21.78 15.07 22.98 15.07 23.32C15.07 23.63 15.29 23.99 15.89 23.88C20.66 22.29 24.1 17.8 24.1 12.5C24.1 5.87 18.73 0.5 12.1 0.5H12Z"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+        <div class="muted" id="meta">Loading…</div>
+      </div>
+    </header>
+
+    <div class="bar">
+      <label>Format
+        <select id="formatid"></select>
+      </label>
+
+      <label>Search
+        <input id="q" placeholder="ex: Gholdengo, Dragapult…" />
+      </label>
+
+      <label>Min games
+        <input id="min_games" type="number" value="5000" min="0" step="10"/>
+      </label>
+
+      <label>Max results
+        <input id="limit" type="number" value="200" min="10" step="50"/>
+      </label>
+
+      <div class="rangeBlock">
+        <div class="muted">Elo range: <span id="elo_label">…</span></div>
+        <div class="rangeWrap" id="elo_wrap">
+          <div class="rangeTrack" id="elo_track"></div>
+          <input id="elo_min" type="range" min="0" max="2000" step="100" value="0" />
+          <input id="elo_max" type="range" min="0" max="2000" step="100" value="2000" />
+        </div>
+      </div>
+    </div>
+
+    <div class="tableWrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="name">Pokemon <span class="sortInd"></span></th>
+            <th data-sort="winrate">Winrate <span class="sortInd"></span></th>
+            <th data-sort="games">Games<span class="sortInd"></span></th>
+            <th data-sort="popularity">Popularity <span class="sortInd"></span></th>
+            <th data-sort="lead_rate">Lead rate<span class="sortInd"></span></th>
+            <th data-sort="kd">K/D <span class="sortInd"></span></th>
+            <th data-sort="dmg_dealt">Dmg dealt %<span class="sortInd"></span></th>
+            <th data-sort="dmg_taken">Dmg taken %<span class="sortInd"></span></th>
+            <th data-sort="avg_elo">Avg ELO <span class="sortInd"></span></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="modalBack" class="modalBack" role="dialog" aria-modal="true">
+    <div class="modal" role="document">
+      <div class="modalHeader">
+        <b id="modalTitle">Details</b>
+        <button id="modalClose" class="btn">Close (Esc)</button>
+      </div>
+      <div id="modalBody" class="modalBody">
+        <div class="muted">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const el = (id) => document.getElementById(id);
+
+const ITEM_ICON_BASE = "https://play.pokemonshowdown.com/sprites/itemicons/";
+const ANI_BASE = "https://play.pokemonshowdown.com/sprites/ani/";
+
+function fmtPct(x) { return (100*x).toFixed(1) + "%"; }
+function fmt1(x) { return (Number(x) || 0).toFixed(1); }
+function fmtPct1(x) { return (Number(x) || 0).toFixed(1) + "%"; }
+
+function escapeHtml(s) {
+  return (s ?? "").toString()
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+}
+
+function nextSprite(img) {
+  let srcs = [];
+  try { srcs = JSON.parse(img.dataset.srcs || "[]"); } catch(e) { srcs = []; }
+  srcs.shift();
+  if (srcs.length) {
+    img.dataset.srcs = JSON.stringify(srcs);
+    img.src = srcs[0];
+  } else {
+    img.style.display = "none";
+  }
+}
+
+function itemSlug(s) {
+  const t = (s ?? "").toString().toLowerCase().trim();
+  const n = t
+    .replace(/♀/g, "-f").replace(/♂/g, "-m")
+    .replace(/[’'"]/g, "")
+    .replace(/%/g, "")
+    .replace(/[:.]/g, "");
+  return n
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9\-]/g, "")
+    .replace(/\-+/g, "-")
+    .replace(/^\-+|\-+$/g, "");
+}
+function itemToId(s) { return (s ?? "").toString().toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+function setItemIcon(img, itemName) {
+  const slug = itemSlug(itemName);
+  const tid  = itemToId(itemName);
+  const tries = [
+    `${ITEM_ICON_BASE}${slug}.png`,
+    `${ITEM_ICON_BASE}${slug}.gif`,
+    `${ITEM_ICON_BASE}${tid}.png`,
+    `${ITEM_ICON_BASE}${tid}.gif`,
+  ];
+  img.dataset.tries = JSON.stringify(tries);
+  img.src = tries[0];
+  img.onerror = function() {
+    let arr = [];
+    try { arr = JSON.parse(this.dataset.tries || "[]"); } catch(e) { arr = []; }
+    arr.shift();
+    if (arr.length) {
+      this.dataset.tries = JSON.stringify(arr);
+      this.src = arr[0];
+    } else {
+      this.style.display = "none";
+    }
+  };
+}
+
+function preferAniFirst(spriteUrls) {
+  const urls = Array.isArray(spriteUrls) ? spriteUrls.slice() : [];
+  const anis = urls.filter(u => u.startsWith(ANI_BASE));
+  const rest = urls.filter(u => !u.startsWith(ANI_BASE));
+  return anis.concat(rest);
+}
+
+const debouncedLoadList = (() => {
+  let t = null;
+  return () => {
+    if (t) clearTimeout(t);
+    t = setTimeout(loadList, 140);
+  };
+})();
+
+const sortState = {
+  key: "popularity",
+  order: "desc",
+};
+
+function defaultOrderForKey(k){
+  return (k === "name") ? "asc" : "desc";
+}
+
+function updateSortIndicators(){
+  document.querySelectorAll('thead th[data-sort]').forEach(th => {
+    const k = th.dataset.sort;
+    const ind = th.querySelector(".sortInd");
+    th.classList.remove("isActive");
+    th.removeAttribute("aria-sort");
+
+    if (k === sortState.key){
+      th.classList.add("isActive");
+      const arrow = (sortState.order === "asc") ? "▲" : "▼";
+      if (ind) ind.textContent = arrow;
+      th.setAttribute("aria-sort", sortState.order === "asc" ? "ascending" : "descending");
+    } else {
+      if (ind) ind.textContent = "";
+    }
+  });
+}
+
+function setSort(k){
+  if (sortState.key === k){
+    sortState.order = (sortState.order === "asc") ? "desc" : "asc";
+  } else {
+    sortState.key = k;
+    sortState.order = defaultOrderForKey(k);
+  }
+  updateSortIndicators();
+  loadList();
+}
+
+function getFilters() {
+  const formatid = el("formatid").value;
+  const q = el("q").value.trim();
+  const min_games = parseInt(el("min_games").value || "0", 10);
+  const limit = parseInt(el("limit").value || "200", 10);
+
+  let elo_min = parseInt(el("elo_min").value || "0", 10);
+  let elo_max = parseInt(el("elo_max").value || "0", 10);
+  if (elo_min > elo_max) { const t = elo_min; elo_min = elo_max; elo_max = t; }
+
+  return { formatid, q, sort: sortState.key, order: sortState.order, min_games, limit, elo_min, elo_max };
+}
+
+function updateEloUI(changed) {
+  const smin = el("elo_min");
+  const smax = el("elo_max");
+
+  let mn = parseInt(smin.value || "0", 10);
+  let mx = parseInt(smax.value || "0", 10);
+
+  if (mn > mx) {
+    if (changed === "min") mx = mn;
+    else mn = mx;
+    smin.value = mn;
+    smax.value = mx;
+  }
+
+  el("elo_label").textContent = `${mn} – ${mx}`;
+
+  const minBound = parseInt(smin.min || "0", 10);
+  const maxBound = parseInt(smin.max || "2000", 10);
+  const span = Math.max(1, maxBound - minBound);
+
+  const pmin = ((mn - minBound) / span) * 100;
+  const pmax = ((mx - minBound) / span) * 100;
+
+  document.documentElement.style.setProperty("--pmin", pmin.toFixed(2) + "%");
+  document.documentElement.style.setProperty("--pmax", pmax.toFixed(2) + "%");
+
+  if (changed === "min") { smin.style.zIndex = "5"; smax.style.zIndex = "4"; }
+  else if (changed === "max") { smax.style.zIndex = "5"; smin.style.zIndex = "4"; }
+}
+
+function openModal(title, bodyHtml) {
+  document.documentElement.classList.add("modal-open");
+  el("modalTitle").textContent = title || "Details";
+  el("modalBody").innerHTML = bodyHtml || "";
+  el("modalBack").style.display = "flex";
+}
+function closeModal() {
+  el("modalBack").style.display = "none";
+  document.documentElement.classList.remove("modal-open");
+}
+el("modalClose").addEventListener("click", closeModal);
+el("modalBack").addEventListener("click", (e) => { if (e.target === el("modalBack")) closeModal(); });
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && el("modalBack").style.display === "flex") closeModal();
+});
+
+async function initFormats() {
+  const res = await fetch("/api/formats");
+  const data = await res.json();
+
+  const sel = el("formatid");
+  sel.innerHTML = "";
+  for (const f of data.formats) {
+    const opt = document.createElement("option");
+    opt.value = f;
+    opt.textContent = f;
+    sel.appendChild(opt);
+  }
+  if (data.formats.includes("all")) sel.value = "all";
+}
+
+async function initEloBounds() {
+  const formatid = el("formatid").value;
+  const res = await fetch("/api/elo_bounds?formatid=" + encodeURIComponent(formatid));
+  const b = await res.json();
+
+  const smin = el("elo_min");
+  const smax = el("elo_max");
+  smin.min = b.min; smin.max = b.max; smin.step = b.step;
+  smax.min = b.min; smax.max = b.max; smax.step = b.step;
+
+  smin.value = b.min;
+  smax.value = b.max;
+
+  updateEloUI();
+}
+
+async function loadList() {
+  const f = getFilters();
+  updateEloUI();
+  updateSortIndicators();
+
+  const fetchLimit = Math.max(2000, f.limit);
+  const params = new URLSearchParams({
+    formatid: f.formatid,
+    q: "",
+    sort: "games",
+    order: "desc",
+    min_games: f.min_games.toString(),
+    limit: fetchLimit.toString(),
+    elo_min: f.elo_min.toString(),
+    elo_max: f.elo_max.toString()
+  });
+
+  const res = await fetch("/api/pokemon?" + params.toString());
+  const data = await res.json();
+
+  el("meta").textContent =
+    `Format: ${data.formatid} • Elo: ${data.elo_min}-${data.elo_max} • Matches: ${data.meta.matches}`;
+
+  let items = Array.isArray(data.items) ? data.items : [];
+
+  for (const it of items) {
+    const g = Number(it.games) || 0;
+    it.dmg_dealt_avg = g > 0 ? (Number(it.dmg_dealt) || 0) / g : 0;
+    it.dmg_taken_avg = g > 0 ? (Number(it.dmg_taken) || 0) / g : 0;
+  }
+
+  const qq = (f.q || "").trim().toLowerCase();
+  if (qq) {
+    items = items.filter(it =>
+      (it.name || "").toLowerCase().includes(qq) ||
+      (it.key || "").toLowerCase().includes(qq)
+    );
+  }
+
+  const rev = (f.order !== "asc");
+  const keyFn = (it) => {
+    switch (f.sort) {
+      case "popularity": return Number(it.popularity) || 0;
+      case "games": return Number(it.games) || 0;
+      case "avg_elo": return Number(it.avg_elo) || 0;
+      case "lead_rate": return Number(it.lead_rate) || 0;
+      case "kd": return Number(it.kd) || 0;
+      case "dmg_dealt": return Number(it.dmg_dealt_avg) || 0;
+      case "dmg_taken": return Number(it.dmg_taken_avg) || 0;
+      case "name": return (it.name || "").toLowerCase();
+      case "winrate":
+      default: return Number(it.winrate) || 0;
+    }
+  };
+
+  items.sort((a, b) => {
+    const ka = keyFn(a), kb = keyFn(b);
+    if (typeof ka === "string" || typeof kb === "string") {
+      const sa = String(ka), sb = String(kb);
+      return rev ? sb.localeCompare(sa) : sa.localeCompare(sb);
+    }
+    return rev ? (kb - ka) : (ka - kb);
+  });
+
+  items = items.slice(0, Math.max(10, f.limit));
+
+  const tbody = el("rows");
+  tbody.innerHTML = "";
+
+  for (const r of items) {
+    const tr = document.createElement("tr");
+    tr.className = "clickable";
+    tr.addEventListener("click", () => loadDetail(r.key, r.name));
+
+    const td0 = document.createElement("td");
+    const srcs = Array.isArray(r.sprite_urls) ? r.sprite_urls : [];
+    const firstSrc = srcs.length ? srcs[0] : "";
+    td0.innerHTML = `
+      <div class="poke">
+        <img data-srcs='${JSON.stringify(srcs)}' src="${firstSrc}" alt="" />
+        <div>
+          <div><b>${escapeHtml(r.name)}</b></div>
+          <div class="muted">${r.games} games • ${r.wins} wins</div>
+        </div>
+      </div>`;
+    tr.appendChild(td0);
+
+    const img = td0.querySelector("img");
+    img.onerror = function() { nextSprite(this); };
+
+    const td1 = document.createElement("td"); td1.textContent = fmtPct(r.winrate); tr.appendChild(td1);
+    const td2 = document.createElement("td"); td2.textContent = `${r.games}`; tr.appendChild(td2);
+    const td3 = document.createElement("td"); td3.textContent = fmtPct(r.popularity); tr.appendChild(td3);
+    const td4 = document.createElement("td"); td4.textContent = fmtPct(r.lead_rate); tr.appendChild(td4);
+    const td5 = document.createElement("td"); td5.textContent = fmt1(r.kd); tr.appendChild(td5);
+    const td6 = document.createElement("td"); td6.textContent = fmt1(r.dmg_dealt_avg); tr.appendChild(td6);
+    const td7 = document.createElement("td"); td7.textContent = fmt1(r.dmg_taken_avg); tr.appendChild(td7);
+    const td8 = document.createElement("td"); td8.textContent = fmt1(r.avg_elo); tr.appendChild(td8);
+
+    tbody.appendChild(tr);
+  }
+}
+
+function miniRowHtml(x) {
+  const s = Array.isArray(x.sprite_urls) ? x.sprite_urls : [];
+  const first = s.length ? s[0] : "";
+  return `
+    <div class="minirow">
+      <img data-srcs='${JSON.stringify(s)}' src="${first}" alt=""/>
+      <div>
+        <div class="miniName">${escapeHtml(x.name)}</div>
+        <div class="miniMeta">${x.games} games • winrate ${fmtPct(x.winrate)} • score ${(Number(x.score||0)*100).toFixed(1)}%</div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadDetail(key, nameHint) {
+  const f = getFilters();
+  const params = new URLSearchParams({
+    formatid: f.formatid,
+    elo_min: f.elo_min.toString(),
+    elo_max: f.elo_max.toString()
+  });
+
+  openModal(`Details - ${nameHint || "Pokemon"}`, `<div class="muted">Loading...</div>`);
+
+  try {
+    const res = await fetch(`/api/pokemon/${encodeURIComponent(key)}/detail?` + params.toString());
+    if (!res.ok) {
+      const txt = await res.text();
+      openModal(`Details - ${nameHint || "Pokemon"}`, `<div class="muted">HTTP error ${res.status}</div><pre class="mono">${escapeHtml(txt)}</pre>`);
+      return;
+    }
+
+    const d = await res.json();
+    if (d && d.error) {
+      openModal(`Details - ${nameHint || "Pokemon"}`, `<div class="muted">Error: ${escapeHtml(d.error)}</div>`);
+      return;
+    }
+
+    const games = Number(d.games) || 0;
+    const dmgDealtAvg = games > 0 ? (Number(d.dmg_dealt) || 0) / games : 0;
+    const dmgTakenAvg = games > 0 ? (Number(d.dmg_taken) || 0) / games : 0;
+
+    const spriteList = preferAniFirst(d.sprite_urls || []);
+
+    el("modalBody").innerHTML = `
+      <div class="detailGrid">
+        <div class="card">
+          <div class="heroRow">
+            <img id="hero_img" class="heroSprite" data-srcs='${JSON.stringify(spriteList)}' src="${spriteList[0] || ""}" alt=""/>
+            <div>
+              <div class="heroTitle">${escapeHtml(d.name)}</div>
+              <div class="heroSub">
+                <span class="chip"><span>Games</span> <b>${d.games}</b></span>
+                <span class="chip"><span>Winrate</span> <b>${fmtPct(d.winrate)}</b></span>
+                <span class="chip"><span>Lead</span> <b>${fmtPct(d.lead_rate)}</b></span>
+                <span class="chip"><span>ELO</span> <b>${fmt1(d.avg_elo)}</b></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="statGrid">
+            <div class="statBox">
+              <div class="statLabel">Winrate</div>
+              <div class="statValue">${fmtPct(d.winrate)}</div>
+            </div>
+
+            <div class="statBox">
+              <div class="statLabel">K/D</div>
+              <div class="statValue">${fmt1(d.kd)}</div>
+              <div class="muted" style="margin-top:6px;">K / D: ${d.kills} / ${d.deaths}</div>
+            </div>
+
+            <div class="statBox">
+              <div class="statLabel">Dmg dealt % (avg / match)</div>
+              <div class="statValue">${fmt1(dmgDealtAvg)}</div>
+            </div>
+
+            <div class="statBox">
+              <div class="statLabel">Dmg taken % (avg / match)</div>
+              <div class="statValue">${fmt1(dmgTakenAvg)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Synergies & matchups</h3>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <h4 style="margin:0 0 6px 0;">Top mates</h4>
+              <div id="mates"></div>
+            </div>
+            <div>
+              <h4 style="margin:0 0 6px 0;">Top counters</h4>
+              <div id="counters"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="detailGrid" style="margin-top: 14px;">
+        <div class="card">
+          <h3>Moves</h3>
+          <div id="moves"></div>
+        </div>
+        <div class="card">
+          <h3>Items</h3>
+          <div id="items"></div>
+        </div>
+      </div>
+    `;
+
+    const hero = document.getElementById("hero_img");
+    if (hero) hero.onerror = function() { nextSprite(this); };
+
+    const matesDiv = document.getElementById("mates");
+    matesDiv.innerHTML = (d.mates || []).map(miniRowHtml).join("");
+    matesDiv.querySelectorAll("img").forEach(img => { img.onerror = function(){ nextSprite(this); }; });
+
+    const ctrDiv = document.getElementById("counters");
+    ctrDiv.innerHTML = (d.counters || []).map(miniRowHtml).join("");
+    ctrDiv.querySelectorAll("img").forEach(img => { img.onerror = function(){ nextSprite(this); }; });
+
+    const moves = (d.moves || []).slice(0, 15);
+    const items = (d.items || []).slice(0, 15);
+    const movesTot = moves.reduce((a, x) => a + (Number(x.uses) || 0), 0) || 1;
+    const itemsTot = items.reduce((a, x) => a + (Number(x.uses) || 0), 0) || 1;
+
+    const mv = document.getElementById("moves");
+    mv.innerHTML = moves.map(x => {
+      const u = Number(x.uses) || 0;
+      const p = (100 * u / movesTot);
+      return `<div class="listLine">
+        <div>${escapeHtml(x.move)}</div>
+        <div class="mono">${u} <span class="muted">(${fmtPct1(p)})</span></div>
+      </div>`;
+    }).join("");
+
+    const it = document.getElementById("items");
+    it.innerHTML = items.map((x, idx) => {
+      const u = Number(x.uses) || 0;
+      const p = (100 * u / itemsTot);
+      return `<div class="listLine">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <img class="itemico" id="itimg_${idx}" alt=""/>
+          <div>${escapeHtml(x.item)}</div>
+        </div>
+        <div class="mono">${u} <span class="muted">(${fmtPct1(p)})</span></div>
+      </div>`;
+    }).join("");
+
+    items.forEach((x, idx) => {
+      const im = document.getElementById("itimg_" + idx);
+      if (im) setItemIcon(im, x.item);
+    });
+
+  } catch (e) {
+    openModal(`Details - ${nameHint || "Pokemon"}`, `<div class="muted">JS error: ${escapeHtml(String(e))}</div>`);
+  }
+}
+
+el("q").addEventListener("input", debouncedLoadList);
+["min_games","limit"].forEach(id => el(id).addEventListener("input", debouncedLoadList));
+
+el("formatid").addEventListener("change", async () => {
+  await initEloBounds();
+  await loadList();
+});
+
+el("elo_min").addEventListener("input", () => { updateEloUI("min"); debouncedLoadList(); });
+el("elo_max").addEventListener("input", () => { updateEloUI("max"); debouncedLoadList(); });
+
+function initSortHeaders(){
+  document.querySelectorAll('thead th[data-sort]').forEach(th => {
+    th.addEventListener("click", () => setSort(th.dataset.sort));
+    th.tabIndex = 0;
+    th.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setSort(th.dataset.sort);
+      }
+    });
+  });
+  updateSortIndicators();
+}
+
+(async () => {
+  await initFormats();
+  await initEloBounds();
+  initSortHeaders();
+  await loadList();
+})();
+</script>
+</body>
+</html>

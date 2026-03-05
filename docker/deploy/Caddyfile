@@ -1,0 +1,4 @@
+pkmeta.net, www.pkmeta.net {
+    encode zstd gzip
+    reverse_proxy pkmeta-net:8000
+}
