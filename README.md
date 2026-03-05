@@ -1,6 +1,8 @@
-# pokestats
+mostly vibecoded ._. zZz
 
-Pokemon meta stats web app built with Flask + SQLite.
+# Pkmeta
+
+Various statistics on the current showdown meta :)
 
 ## Data source
 
