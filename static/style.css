@@ -634,6 +634,82 @@ tbody tr.clickable:hover{ background: rgba(255,255,255,.05); }
 }
 @media (max-width: 980px){ .statGrid{ grid-template-columns: 1fr; } }
 
+.topStatsRow{
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.abilitiesGrid{
+  margin-top: 0;
+  grid-template-columns: 1fr;
+}
+
+.statBoxTight{ padding: 10px; }
+
+.baseStatsList{
+  margin-top: 6px;
+  display: grid;
+  gap: 8px;
+}
+
+.statBarRow{
+  display: grid;
+  gap: 4px;
+}
+
+.statBarRowInline{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.statName{
+  width: 34px;
+  font-size: 12px;
+  color: rgba(255,255,255,.88);
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.statNum{
+  width: 30px;
+  text-align: right;
+  flex: 0 0 auto;
+}
+
+.statBarHead{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: rgba(255,255,255,.88);
+}
+
+.statBarTrack{
+  width: 100%;
+  flex: 1 1 auto;
+  height: 12px;
+  overflow: hidden;
+}
+
+.statBarFill{
+  height: 100%;
+  background: linear-gradient(90deg, #73d8ff 0%, #7ce0a4 100%);
+}
+
+.statBarFill.isRed{ background: linear-gradient(90deg, #ff6b6b 0%, #ff3b3b 100%); }
+.statBarFill.isOrange{ background: linear-gradient(90deg, #ffb454 0%, #ff8b2b 100%); }
+.statBarFill.isYellow{ background: linear-gradient(90deg, #ffe27a 0%, #ffd54a 100%); }
+.statBarFill.isGreen{ background: linear-gradient(90deg, #74e39f 0%, #42c978 100%); }
+.statBarFill.isBlue{ background: linear-gradient(90deg, #7cc4ff 0%, #4a8dff 100%); }
+
+@media (max-width: 1100px){
+  .topStatsRow{ grid-template-columns: 1fr; }
+}
+
 .statBox{
   border: 1px solid rgba(255,255,255,.10);
   background: rgba(0,0,0,.10);
@@ -642,6 +718,37 @@ tbody tr.clickable:hover{ background: rgba(255,255,255,.05); }
 }
 .statLabel{ color: var(--muted); font-size: 12px; }
 .statValue{ font-weight: 900; font-size: 20px; margin-top: 3px; }
+
+.abilitiesGrid .statValue{
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.abilityBox{
+  padding: 8px 10px;
+}
+
+.abilityRow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.abilityName{
+  font-weight: 800;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.abilityPct{
+  font-size: 13px;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
 
 .minirow{
   display:flex;

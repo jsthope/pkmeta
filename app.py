@@ -35,6 +35,8 @@ _TYPE_ORDER = [
 ]
 _TYPE_ORDER_INDEX = {t: i for i, t in enumerate(_TYPE_ORDER)}
 _POKEDEX_TYPE_CACHE: Dict[str, List[str]] | None = None
+_POKEDEX_ABILITIES_CACHE: Dict[str, List[str]] | None = None
+_POKEDEX_BASE_STATS_CACHE: Dict[str, Dict[str, int]] | None = None
 _MOVE_TYPE_CACHE: Dict[str, str] | None = None
 
 
@@ -191,6 +193,106 @@ def load_pokedex_type_map(local_json_path: str = "") -> Dict[str, List[str]]:
                 out[nid] = types
 
     _POKEDEX_TYPE_CACHE = out
+    return out
+
+
+def load_pokedex_abilities_map(local_json_path: str = "") -> Dict[str, List[str]]:
+    global _POKEDEX_ABILITIES_CACHE
+    if _POKEDEX_ABILITIES_CACHE is not None:
+        return _POKEDEX_ABILITIES_CACHE
+
+    data: Any = None
+
+    if local_json_path:
+        try:
+            with open(local_json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+
+    if data is None:
+        for url in POKEDEX_URLS:
+            try:
+                data = _read_json_url(url)
+                break
+            except Exception:
+                data = None
+
+    out: Dict[str, List[str]] = {}
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if not isinstance(v, dict):
+                continue
+            abs_raw = v.get("abilities")
+            if not isinstance(abs_raw, dict):
+                continue
+            abilities = [str(x).strip() for x in abs_raw.values() if str(x).strip()]
+            if not abilities:
+                continue
+
+            kid = _to_id(str(k))
+            if kid:
+                out[kid] = abilities
+
+            nm = str(v.get("name") or "")
+            nid = _to_id(nm)
+            if nid and nid not in out:
+                out[nid] = abilities
+
+    _POKEDEX_ABILITIES_CACHE = out
+    return out
+
+
+def load_pokedex_base_stats_map(local_json_path: str = "") -> Dict[str, Dict[str, int]]:
+    global _POKEDEX_BASE_STATS_CACHE
+    if _POKEDEX_BASE_STATS_CACHE is not None:
+        return _POKEDEX_BASE_STATS_CACHE
+
+    data: Any = None
+
+    if local_json_path:
+        try:
+            with open(local_json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+
+    if data is None:
+        for url in POKEDEX_URLS:
+            try:
+                data = _read_json_url(url)
+                break
+            except Exception:
+                data = None
+
+    out: Dict[str, Dict[str, int]] = {}
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if not isinstance(v, dict):
+                continue
+            bs_raw = v.get("baseStats")
+            if not isinstance(bs_raw, dict):
+                continue
+
+            bs = {
+                "hp": int(bs_raw.get("hp", 0) or 0),
+                "atk": int(bs_raw.get("atk", 0) or 0),
+                "def": int(bs_raw.get("def", 0) or 0),
+                "spa": int(bs_raw.get("spa", 0) or 0),
+                "spd": int(bs_raw.get("spd", 0) or 0),
+                "spe": int(bs_raw.get("spe", 0) or 0),
+            }
+
+            kid = _to_id(str(k))
+            if kid:
+                out[kid] = bs
+
+            nm = str(v.get("name") or "")
+            nid = _to_id(nm)
+            if nid and nid not in out:
+                out[nid] = bs
+
+    _POKEDEX_BASE_STATS_CACHE = out
     return out
 
 
@@ -660,8 +762,42 @@ def make_app(
             (formatid, key),
         ).fetchall()
 
+        abilities_map = load_pokedex_abilities_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+        expected_abilities = abilities_map.get(key, abilities_map.get(_to_id(name), []))
+        expected_set = set(expected_abilities)
+
+        abilities_payload: List[Dict[str, Any]] = []
+        try:
+            ab_rows = conn.execute(
+                "SELECT ability, uses FROM pokemon_abilities WHERE formatid=? AND key=? ORDER BY uses DESC",
+                (formatid, key),
+            ).fetchall()
+            if expected_set:
+                ab_rows = [r for r in ab_rows if str(r["ability"]) in expected_set]
+            total_ab = sum(int(r["uses"]) for r in ab_rows)
+            if total_ab > 0:
+                for r in ab_rows:
+                    uses = int(r["uses"])
+                    abilities_payload.append(
+                        {
+                            "ability": str(r["ability"]),
+                            "uses": uses,
+                            "pct": uses / total_ab,
+                        }
+                    )
+        except sqlite3.OperationalError:
+            pass
+
         conn.close()
         move_type_map = load_move_type_map(os.environ.get("PKMETA_MOVES_JSON", ""))
+
+        if not abilities_payload:
+            abilities = expected_abilities
+            n = max(1, len(abilities))
+            abilities_payload = [{"ability": a, "uses": 0, "pct": 1.0 / n} for a in abilities]
+
+        base_stats_map = load_pokedex_base_stats_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+        base_stats = base_stats_map.get(key, base_stats_map.get(_to_id(name), {}))
 
         def kname(k: str) -> str:
             return name_map.get(k, k)
@@ -721,6 +857,8 @@ def make_app(
                     for r in moves_rows
                 ],
                 "items": [{"item": str(r["item"]), "uses": int(r["uses"])} for r in items_rows],
+                "abilities": abilities_payload,
+                "base_stats": base_stats,
                 "min_pair_games": min_pair_games,
                 "min_vs_games": min_vs_games,
             }

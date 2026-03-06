@@ -712,10 +712,6 @@ async function loadDetail(key, nameHint) {
       return;
     }
 
-    const games = Number(d.games) || 0;
-    const dmgDealtAvg = games > 0 ? (Number(d.dmg_dealt) || 0) / games : 0;
-    const dmgTakenAvg = games > 0 ? (Number(d.dmg_taken) || 0) / games : 0;
-
     const spriteList = preferAniFirst(d.sprite_urls || []);
 
     el("modalBody").innerHTML = `
@@ -734,26 +730,10 @@ async function loadDetail(key, nameHint) {
             </div>
           </div>
 
-          <div class="statGrid">
-            <div class="statBox">
-              <div class="statLabel">Winrate</div>
-              <div class="statValue">${fmtPct(d.winrate)}</div>
-            </div>
-
-            <div class="statBox">
-              <div class="statLabel">K/D</div>
-              <div class="statValue">${fmt1(d.kd)}</div>
-              <div class="muted" style="margin-top:6px;">K / D: ${d.kills} / ${d.deaths}</div>
-            </div>
-
-            <div class="statBox">
-              <div class="statLabel">Dmg dealt % (avg / match)</div>
-              <div class="statValue">${fmt1(dmgDealtAvg)}</div>
-            </div>
-
-            <div class="statBox">
-              <div class="statLabel">Dmg taken % (avg / match)</div>
-              <div class="statValue">${fmt1(dmgTakenAvg)}</div>
+          <div class="topStatsRow">
+            <div class="statGrid abilitiesGrid" id="abilities_top"></div>
+            <div class="statBox statBoxTight">
+              <div id="base_stats_right" class="baseStatsList"></div>
             </div>
           </div>
         </div>
@@ -799,6 +779,7 @@ async function loadDetail(key, nameHint) {
 
     const moves = (d.moves || []).slice(0, 15);
     const items = (d.items || []).slice(0, 15);
+    const abilities = (d.abilities || []).slice(0, 6);
     const movesTot = moves.reduce((a, x) => a + (Number(x.uses) || 0), 0) || 1;
     const itemsTot = items.reduce((a, x) => a + (Number(x.uses) || 0), 0) || 1;
 
@@ -829,6 +810,42 @@ async function loadDetail(key, nameHint) {
       const im = document.getElementById("itimg_" + idx);
       if (im) setItemIcon(im, x.item);
     });
+
+    const abTop = document.getElementById("abilities_top");
+    abTop.innerHTML = abilities.length
+      ? abilities.map(x => {
+          const ability = escapeHtml((x && x.ability) ? x.ability : String(x || ""));
+          const pct = (x && typeof x.pct === "number") ? fmtPct(x.pct) : "-";
+          return `<div class="statBox abilityBox"><div class="abilityRow"><span class="abilityName">${ability}</span><span class="abilityPct">${pct}</span></div></div>`;
+        }).join("")
+      : '<div class="muted">No ability data</div>';
+
+    const statRows = [
+      ["HP", Number((d.base_stats || {}).hp) || 0],
+      ["Atk", Number((d.base_stats || {}).atk) || 0],
+      ["Def", Number((d.base_stats || {}).def) || 0],
+      ["SpA", Number((d.base_stats || {}).spa) || 0],
+      ["SpD", Number((d.base_stats || {}).spd) || 0],
+      ["Spe", Number((d.base_stats || {}).spe) || 0],
+    ];
+    const bs = document.getElementById("base_stats_right");
+    bs.innerHTML = statRows.map(([label, val]) => {
+      const v = Number(val) || 0;
+      const pct = Math.max(0, Math.min(100, (v / 255) * 100));
+      let tone = "isBlue";
+      if (v < 50) tone = "isRed";
+      else if (v < 75) tone = "isOrange";
+      else if (v < 100) tone = "isYellow";
+      else if (v < 125) tone = "isGreen";
+      else if (v < 150) tone = "isBlue";
+      return `
+      <div class="statBarRow statBarRowInline">
+        <span class="statName">${label}</span>
+        <span class="mono statNum">${v}</span>
+        <div class="statBarTrack"><div class="statBarFill ${tone}" style="width:${pct.toFixed(1)}%"></div></div>
+      </div>
+    `;
+    }).join("");
 
   } catch (e) {
     openModal(`Details - ${nameHint || "Pokemon"}`, `<div class="muted">JS error: ${escapeHtml(String(e))}</div>`);

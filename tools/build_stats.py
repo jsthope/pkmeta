@@ -113,14 +113,15 @@ class ParsedMatch:
     teams_species: Dict[str, List[str]]
     winner_side: Optional[str]
 
-    used: Dict[str, Dict[str, int]]
-    lead: Dict[str, Dict[str, int]]
-    kills: Dict[str, Dict[str, int]]
-    deaths: Dict[str, Dict[str, int]]
-    dmg_dealt: Dict[str, Dict[str, int]]
-    dmg_taken: Dict[str, Dict[str, int]]
-    moves: Dict[str, Dict[Tuple[str, str], int]]
-    items: Dict[str, Dict[Tuple[str, str], int]]
+    used: Dict[str, DefaultDict[str, int]]
+    lead: Dict[str, DefaultDict[str, int]]
+    kills: Dict[str, DefaultDict[str, int]]
+    deaths: Dict[str, DefaultDict[str, int]]
+    dmg_dealt: Dict[str, DefaultDict[str, int]]
+    dmg_taken: Dict[str, DefaultDict[str, int]]
+    moves: Dict[str, DefaultDict[Tuple[str, str], int]]
+    items: Dict[str, DefaultDict[Tuple[str, str], int]]
+    abilities: Dict[str, DefaultDict[Tuple[str, str], int]]
 
 
 def parse_log_one_pass(log: str) -> Optional[ParsedMatch]:
@@ -136,11 +137,13 @@ def parse_log_one_pass(log: str) -> Optional[ParsedMatch]:
     dmg_taken = {"p1": defaultdict(int), "p2": defaultdict(int)}
     moves = {"p1": defaultdict(int), "p2": defaultdict(int)}
     items = {"p1": defaultdict(int), "p2": defaultdict(int)}
+    abilities = {"p1": defaultdict(int), "p2": defaultdict(int)}
 
     active_key: Dict[str, str] = {}
     last_hp: Dict[str, float] = {}
     first_active: Dict[str, Optional[str]] = {"p1": None, "p2": None}
     last_move_user: Optional[Tuple[str, str]] = None
+    seen_abilities: Dict[str, set[Tuple[str, str]]] = {"p1": set(), "p2": set()}
 
     for line in log.split("\n"):
         if not line or line[0] != "|":
@@ -219,6 +222,30 @@ def parse_log_one_pass(log: str) -> Optional[ParsedMatch]:
             if it:
                 items[side][(k, it)] += 1
 
+        elif tag == "-ability" and len(parts) >= 4:
+            ident = parts[2]
+            side = side_from_ident(ident)
+            if side not in ("p1", "p2"):
+                continue
+
+            ip = ident_prefix(ident)
+            k = active_key.get(ip)
+            if not k and ":" in ident:
+                sp = clean_species(ident.split(":", 1)[1])
+                k, _ = canonicalize_species(sp)
+            if not k:
+                continue
+
+            ab = parts[3].strip()
+            if not ab:
+                continue
+
+            kk = (k, ab)
+            if kk in seen_abilities[side]:
+                continue
+            seen_abilities[side].add(kk)
+            abilities[side][kk] += 1
+
         elif tag == "-damage" and len(parts) >= 4:
             ident = parts[2]
             side = side_from_ident(ident)
@@ -281,7 +308,7 @@ def parse_log_one_pass(log: str) -> Optional[ParsedMatch]:
         winner_side=winner_side,
         used=used, lead=lead, kills=kills, deaths=deaths,
         dmg_dealt=dmg_dealt, dmg_taken=dmg_taken,
-        moves=moves, items=items,
+        moves=moves, items=items, abilities=abilities,
     )
 
 
@@ -386,6 +413,14 @@ def ensure_schema(conn: sqlite3.Connection, fast_sqlite: bool) -> None:
           item TEXT NOT NULL,
           uses INTEGER NOT NULL,
           PRIMARY KEY (formatid, key, item)
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS pokemon_abilities (
+          formatid TEXT NOT NULL,
+          key TEXT NOT NULL,
+          ability TEXT NOT NULL,
+          uses INTEGER NOT NULL,
+          PRIMARY KEY (formatid, key, ability)
         ) WITHOUT ROWID;
         """
     )
@@ -500,6 +535,17 @@ def rollup_all(conn: sqlite3.Connection) -> None:
         """
     )
 
+    conn.execute("DELETE FROM pokemon_abilities WHERE formatid='all'")
+    conn.execute(
+        """
+        INSERT INTO pokemon_abilities(formatid, key, ability, uses)
+        SELECT 'all', key, ability, SUM(uses)
+        FROM pokemon_abilities
+        WHERE formatid <> 'all'
+        GROUP BY key, ability
+        """
+    )
+
     conn.execute("COMMIT")
 
 
@@ -550,6 +596,7 @@ def main() -> None:
     day_tot_cache: DefaultDict[Tuple[str, str], List[int]] = defaultdict(lambda: [0, 0])
     moves_cache: DefaultDict[Tuple[str, str, str], int] = defaultdict(int)
     items_cache: DefaultDict[Tuple[str, str, str], int] = defaultdict(int)
+    abilities_cache: DefaultDict[Tuple[str, str, str], int] = defaultdict(int)
 
     def bump_pokemon(fmt: str, bucket: int, key: str, name: str,
                      games: int, wins: int, sum_elo: int,
@@ -574,7 +621,7 @@ def main() -> None:
             cur[10] = int(cur[10]) + dmg_taken
 
     def flush() -> None:
-        if not (poke_cache or matches_cache or mates_cache or vs_cache or day_cache or day_tot_cache or moves_cache or items_cache):
+        if not (poke_cache or matches_cache or mates_cache or vs_cache or day_cache or day_tot_cache or moves_cache or items_cache or abilities_cache):
             return
 
         conn.execute("BEGIN")
@@ -677,6 +724,16 @@ def main() -> None:
             [(fmt, key, it, uses) for (fmt, key, it), uses in items_cache.items()],
         )
 
+        conn.executemany(
+            """
+            INSERT INTO pokemon_abilities(formatid, key, ability, uses)
+            VALUES (?,?,?,?)
+            ON CONFLICT(formatid, key, ability) DO UPDATE SET
+              uses=uses+excluded.uses
+            """,
+            [(fmt, key, ab, uses) for (fmt, key, ab), uses in abilities_cache.items()],
+        )
+
         conn.execute("COMMIT")
 
         poke_cache.clear()
@@ -687,6 +744,7 @@ def main() -> None:
         day_tot_cache.clear()
         moves_cache.clear()
         items_cache.clear()
+        abilities_cache.clear()
 
     seen = 0
 
@@ -788,6 +846,8 @@ def main() -> None:
                         moves_cache[(fmt, k, mv)] += uses
                     for (k, it), uses in pm.items[side].items():
                         items_cache[(fmt, k, it)] += uses
+                    for (k, ab), uses in pm.abilities[side].items():
+                        abilities_cache[(fmt, k, ab)] += uses
 
                 seen += 1
                 if seen % args.flush == 0:
