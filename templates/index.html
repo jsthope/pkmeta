@@ -247,13 +247,37 @@ function preferAniFirst(spriteUrls) {
   return anis.concat(rest);
 }
 
-const debouncedLoadAll = (() => {
+const viewSearchState = {
+  pokemon: { q: "", min_games: "5000", limit: "200" },
+  attacks: { q: "", min_games: "5000", limit: "200" },
+};
+
+function saveSearchStateForView(view) {
+  const s = viewSearchState[view];
+  if (!s) return;
+  s.q = el("q").value;
+  s.min_games = el("min_games").value;
+  s.limit = el("limit").value;
+}
+
+function restoreSearchStateForView(view) {
+  const s = viewSearchState[view];
+  if (!s) return;
+  el("q").value = s.q ?? "";
+  el("min_games").value = s.min_games ?? "5000";
+  el("limit").value = s.limit ?? "200";
+}
+
+const debouncedLoadActive = (() => {
   let t = null;
   return () => {
+    const targetView = activeView;
     if (t) clearTimeout(t);
     t = setTimeout(() => {
-      loadList();
-      loadAttacks();
+      saveSearchStateForView(targetView);
+      if (targetView !== activeView) return;
+      if (targetView === "pokemon") loadList();
+      else loadAttacks();
     }, 140);
   };
 })();
@@ -269,13 +293,25 @@ const attackSortState = {
 };
 
 const typeFilterState = {
-  selected: "",
+  pokemon: "",
+  attacks: "",
+};
+
+const typeOptionsCache = {
+  pokemon: { key: "", types: [] },
+  attacks: { key: "", types: [] },
 };
 
 let activeView = "pokemon";
+let hasPrewarmedDetail = false;
 
 function setView(view) {
-  activeView = (view === "attacks") ? "attacks" : "pokemon";
+  const nextView = (view === "attacks") ? "attacks" : "pokemon";
+  if (nextView !== activeView) {
+    saveSearchStateForView(activeView);
+    activeView = nextView;
+    restoreSearchStateForView(activeView);
+  }
 
   const isPokemon = activeView === "pokemon";
   el("tab_pokemon").classList.toggle("isActive", isPokemon);
@@ -285,6 +321,7 @@ function setView(view) {
 
   el("panel_pokemon").classList.toggle("isActive", isPokemon);
   el("panel_attacks").classList.toggle("isActive", !isPokemon);
+  updateTypeButtonsUI();
 }
 
 function typeIconUrl(typeName) {
@@ -292,8 +329,15 @@ function typeIconUrl(typeName) {
   return `${TYPE_ICON_BASE}${slug}.svg`;
 }
 
+function sanitizeTypes(types) {
+  return (Array.isArray(types) ? types : []).filter(t => {
+    const v = String(t || "").trim().toLowerCase();
+    return v && v !== "unknown" && v !== "bird";
+  });
+}
+
 function updateTypeButtonsUI() {
-  const selected = typeFilterState.selected || "";
+  const selected = typeFilterState[activeView] || "";
   document.querySelectorAll("#type_filter_wrap .typeBtn").forEach(btn => {
     const t = btn.dataset.type || "";
     const isActive = t === "" ? !selected : selected === t;
@@ -304,11 +348,12 @@ function updateTypeButtonsUI() {
 
 function setTypeFilter(typeName) {
   const t = (typeName || "").trim();
-  if (!t) typeFilterState.selected = "";
-  else typeFilterState.selected = (typeFilterState.selected === t) ? "" : t;
+  const curr = typeFilterState[activeView] || "";
+  if (!t) typeFilterState[activeView] = "";
+  else typeFilterState[activeView] = (curr === t) ? "" : t;
   updateTypeButtonsUI();
-  loadList();
-  loadAttacks();
+  if (activeView === "pokemon") loadList();
+  else loadAttacks();
 }
 
 function renderTypeButtons(types) {
@@ -421,7 +466,7 @@ function getFilters() {
   let elo_min = parseInt(el("elo_min").value || "0", 10);
   let elo_max = parseInt(el("elo_max").value || "0", 10);
   if (elo_min > elo_max) { const t = elo_min; elo_min = elo_max; elo_max = t; }
-  const selectedType = (typeFilterState.selected || "").trim();
+  const selectedType = (typeFilterState[activeView] || "").trim();
 
   return {
     formatid,
@@ -497,7 +542,8 @@ async function initFormats() {
     opt.textContent = f;
     sel.appendChild(opt);
   }
-  if (data.formats.includes("all")) sel.value = "all";
+  if (data.formats.includes("gen9ou")) sel.value = "gen9ou";
+  else if (data.formats.includes("all")) sel.value = "all";
 }
 
 async function initEloBounds() {
@@ -518,6 +564,18 @@ async function initEloBounds() {
 
 async function initTypeFilters() {
   const f = getFilters();
+  const cacheKey = `${f.formatid}|${f.elo_min}|${f.elo_max}`;
+  const cached = typeOptionsCache[activeView];
+
+  if (cached && cached.key === cacheKey && Array.isArray(cached.types)) {
+    const types = cached.types;
+    if (typeFilterState[activeView] && !types.includes(typeFilterState[activeView])) {
+      typeFilterState[activeView] = "";
+    }
+    renderTypeButtons(types);
+    return;
+  }
+
   const params = new URLSearchParams({
     formatid: f.formatid,
     elo_min: f.elo_min.toString(),
@@ -526,9 +584,10 @@ async function initTypeFilters() {
   const res = await fetch("/api/types?" + params.toString());
   const data = await res.json();
 
-  const types = Array.isArray(data.types) ? data.types : [];
-  if (typeFilterState.selected && !types.includes(typeFilterState.selected)) {
-    typeFilterState.selected = "";
+  const types = sanitizeTypes(data.types);
+  typeOptionsCache[activeView] = { key: cacheKey, types };
+  if (typeFilterState[activeView] && !types.includes(typeFilterState[activeView])) {
+    typeFilterState[activeView] = "";
   }
   renderTypeButtons(types);
 }
@@ -561,7 +620,7 @@ async function loadAttacks() {
     const td = document.createElement("td");
     td.colSpan = 5;
     td.className = "muted";
-    td.textContent = "No attack data found. Build attacks.sqlite from real parquet files (not Git LFS pointers).";
+    td.textContent = "No attack data found.";
     tr.appendChild(td);
     tbody.appendChild(tr);
     return;
@@ -579,13 +638,28 @@ async function loadAttacks() {
 }
 
 function typeIconsHtml(types) {
-  const arr = Array.isArray(types) ? types : [];
+  const arr = sanitizeTypes(types);
   if (!arr.length) return '<span class="muted">-</span>';
   return `<div class="typeIcons">${arr.map(t => `<img src="${typeIconUrl(t)}" alt="${escapeHtml(t)}" title="${escapeHtml(t)}"/>`).join("")}</div>`;
 }
 
 function attackNameWithTypeHtml(name, typeName) {
   return `<div class="attackNameWrap"><span>${escapeHtml(name || "-")}</span>${typeIconsHtml([typeName || "Unknown"])}</div>`;
+}
+
+function prewarmDetailIfNeeded(items, f) {
+  if (hasPrewarmedDetail) return;
+  const first = Array.isArray(items) ? items.find(x => x && x.key) : null;
+  if (!first) return;
+
+  hasPrewarmedDetail = true;
+  const params = new URLSearchParams({
+    formatid: f.formatid,
+    elo_min: f.elo_min.toString(),
+    elo_max: f.elo_max.toString(),
+  });
+
+  fetch(`/api/pokemon/${encodeURIComponent(first.key)}/detail?` + params.toString()).catch(() => {});
 }
 
 async function loadList() {
@@ -654,6 +728,7 @@ async function loadList() {
   });
 
   items = items.slice(0, Math.max(10, f.limit));
+  prewarmDetailIfNeeded(items, f);
 
   const tbody = el("rows");
   tbody.innerHTML = "";
@@ -715,6 +790,7 @@ async function loadDetail(key, nameHint) {
   });
 
   openModal(`Details - ${nameHint || "Pokemon"}`, `<div class="muted">Loading...</div>`);
+  await new Promise(resolve => requestAnimationFrame(resolve));
 
   try {
     const res = await fetch(`/api/pokemon/${encodeURIComponent(key)}/detail?` + params.toString());
@@ -870,20 +946,38 @@ async function loadDetail(key, nameHint) {
   }
 }
 
-el("q").addEventListener("input", debouncedLoadAll);
-["min_games","limit"].forEach(id => el(id).addEventListener("input", debouncedLoadAll));
+el("q").addEventListener("input", debouncedLoadActive);
+["min_games","limit"].forEach(id => el(id).addEventListener("input", debouncedLoadActive));
 
 el("formatid").addEventListener("change", async () => {
+  saveSearchStateForView(activeView);
+  typeOptionsCache.pokemon = { key: "", types: [] };
+  typeOptionsCache.attacks = { key: "", types: [] };
+  hasPrewarmedDetail = false;
   await initEloBounds();
   await initTypeFilters();
   await loadList();
   await loadAttacks();
 });
 
-el("elo_min").addEventListener("input", () => { updateEloUI("min"); debouncedLoadAll(); });
-el("elo_max").addEventListener("input", () => { updateEloUI("max"); debouncedLoadAll(); });
-el("tab_pokemon").addEventListener("click", () => setView("pokemon"));
-el("tab_attacks").addEventListener("click", () => setView("attacks"));
+el("elo_min").addEventListener("input", () => {
+  updateEloUI("min");
+  debouncedLoadActive();
+});
+el("elo_max").addEventListener("input", () => {
+  updateEloUI("max");
+  debouncedLoadActive();
+});
+el("tab_pokemon").addEventListener("click", async () => {
+  setView("pokemon");
+  await initTypeFilters();
+  await loadList();
+});
+el("tab_attacks").addEventListener("click", async () => {
+  setView("attacks");
+  await initTypeFilters();
+  await loadAttacks();
+});
 
 function initSortHeaders(){
   document.querySelectorAll('#pokemonHead th[data-sort]').forEach(th => {
