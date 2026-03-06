@@ -81,9 +81,18 @@ a{ color: inherit; }
   margin-bottom: 14px;
 }
 .top h1{
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0;
   font-size: 24px;
   letter-spacing: .2px;
+}
+
+.brandMark{
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
 }
 .top h1 span{
   font-weight: 600;
@@ -96,6 +105,23 @@ a{ color: inherit; }
   gap: 12px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.langSelectWrap{
+  display: inline-flex;
+  min-width: 0;
+}
+
+.langSelectWrap select{
+  height: 34px;
+  width: 52px;
+  padding: 0 6px;
+  border-radius: 6px;
+  text-align: center;
+  text-align-last: center;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
 }
 
 .githubLink{

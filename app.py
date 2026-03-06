@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import os
 import re
 import sqlite3
 import unicodedata
+from io import StringIO
 from typing import Any, Dict, List, Set
 from urllib.request import Request, urlopen
 
@@ -28,6 +30,39 @@ MOVES_URLS = (
     "https://play.pokemonshowdown.com/data/moves.json",
     "https://raw.githubusercontent.com/smogon/pokemon-showdown/master/data/moves.json",
 )
+POKEMON_SPECIES_CSV_URLS = (
+    "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/pokemon_species.csv",
+)
+POKEMON_SPECIES_NAMES_CSV_URLS = (
+    "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/pokemon_species_names.csv",
+)
+POKEMON_CSV_URLS = (
+    "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/pokemon.csv",
+)
+POKEMON_FORM_NAMES_CSV_URLS = (
+    "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/pokemon_form_names.csv",
+)
+POKEMON_FORMS_CSV_URLS = (
+    "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/pokemon_forms.csv",
+)
+MOVES_CSV_URLS = (
+    "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/moves.csv",
+)
+MOVE_NAMES_CSV_URLS = (
+    "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/move_names.csv",
+)
+ITEMS_CSV_URLS = (
+    "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/items.csv",
+)
+ITEM_NAMES_CSV_URLS = (
+    "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/item_names.csv",
+)
+ABILITIES_CSV_URLS = (
+    "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/abilities.csv",
+)
+ABILITY_NAMES_CSV_URLS = (
+    "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/ability_names.csv",
+)
 _TOID_RE = re.compile(r"[^a-z0-9]+")
 _TYPE_ORDER = [
     "Normal", "Fire", "Water", "Electric", "Grass", "Ice", "Fighting", "Poison", "Ground",
@@ -37,7 +72,66 @@ _TYPE_ORDER_INDEX = {t: i for i, t in enumerate(_TYPE_ORDER)}
 _POKEDEX_TYPE_CACHE: Dict[str, List[str]] | None = None
 _POKEDEX_ABILITIES_CACHE: Dict[str, List[str]] | None = None
 _POKEDEX_BASE_STATS_CACHE: Dict[str, Dict[str, int]] | None = None
+_POKEDEX_IDENTITY_CACHE: Dict[str, Dict[str, Any]] | None = None
 _MOVE_TYPE_CACHE: Dict[str, str] | None = None
+_POKEMON_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
+_MOVE_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
+_ITEM_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
+_ABILITY_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
+
+SUPPORTED_LANGS: tuple[str, ...] = ("en", "fr", "de", "es", "it", "ja", "ko", "zh-hans")
+LANG_TO_OG_LOCALE: Dict[str, str] = {
+    "en": "en_US",
+    "fr": "fr_FR",
+    "de": "de_DE",
+    "es": "es_ES",
+    "it": "it_IT",
+    "ja": "ja_JP",
+    "ko": "ko_KR",
+    "zh-hans": "zh_CN",
+}
+SEO_COPY: Dict[str, Dict[str, str]] = {
+    "en": {
+        "title": "pkmeta.net - Pokemon Meta, VGC/PvP Stats & Win Rate",
+        "description": "pkmeta.net: competitive Pokemon stats for meta analysis, win rate, usage, synergies, counters, and Elo filters.",
+        "keywords": "pkmeta, pokemon, pokemon meta, meta pokemon, pokemon strategy, best pokemon, pvp, vgc, winrate, pokemon stats",
+    },
+    "fr": {
+        "title": "pkmeta.net - Meta Pokemon, Stats VGC/PvP et Taux de Victoire",
+        "description": "pkmeta.net: statistiques Pokemon competitives pour analyser la meta, le taux de victoire, l'usage, les synergies, les contres et l'Elo.",
+        "keywords": "pkmeta, pokemon, meta pokemon, strategie pokemon, pvp, vgc, taux de victoire, statistiques pokemon",
+    },
+    "de": {
+        "title": "pkmeta.net - Pokemon-Meta, VGC/PvP-Stats und Winrate",
+        "description": "pkmeta.net: kompetitive Pokemon-Statistiken fur Meta-Analyse, Winrate, Usage, Synergien, Counter und Elo-Filter.",
+        "keywords": "pkmeta, pokemon, pokemon meta, pokemon strategie, pvp, vgc, winrate, pokemon stats",
+    },
+    "es": {
+        "title": "pkmeta.net - Meta Pokemon, Estadisticas VGC/PvP y Winrate",
+        "description": "pkmeta.net: estadisticas competitivas de Pokemon para analizar la meta, winrate, uso, sinergias, counters y filtros Elo.",
+        "keywords": "pkmeta, pokemon, meta pokemon, estrategia pokemon, pvp, vgc, winrate, estadisticas pokemon",
+    },
+    "it": {
+        "title": "pkmeta.net - Meta Pokemon, Statistiche VGC/PvP e Winrate",
+        "description": "pkmeta.net: statistiche competitive Pokemon per analisi meta, winrate, uso, sinergie, counter e filtri Elo.",
+        "keywords": "pkmeta, pokemon, meta pokemon, strategia pokemon, pvp, vgc, winrate, statistiche pokemon",
+    },
+    "ja": {
+        "title": "pkmeta.net - Pokemon Meta, VGC/PvP Stats and Win Rate",
+        "description": "pkmeta.net: Pokemonの対戦統計。メタ分析、勝率、使用率、相性、対策、Eloフィルターを確認できます。",
+        "keywords": "pkmeta, pokemon, meta, pvp, vgc, winrate, usage, stats",
+    },
+    "ko": {
+        "title": "pkmeta.net - Pokemon Meta, VGC/PvP Stats and Win Rate",
+        "description": "pkmeta.net: 포켓몬 대전 통계. 메타 분석, 승률, 사용률, 시너지, 카운터, Elo 필터를 제공합니다.",
+        "keywords": "pkmeta, pokemon, meta, pvp, vgc, winrate, usage, stats",
+    },
+    "zh-hans": {
+        "title": "pkmeta.net - Pokemon Meta, VGC/PvP Stats and Win Rate",
+        "description": "pkmeta.net: 宝可梦对战数据平台，提供环境分析、胜率、使用率、联防与克制以及 Elo 筛选。",
+        "keywords": "pkmeta, pokemon, meta, pvp, vgc, winrate, usage, stats",
+    },
+}
 
 
 # Sprite URL helpers
@@ -124,7 +218,15 @@ def clamp_int(x: Any, lo: int, hi: int) -> int:
 
 
 def _to_id(s: str) -> str:
-    return _TOID_RE.sub("", (s or "").lower())
+    t = unicodedata.normalize("NFKD", (s or ""))
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    return _TOID_RE.sub("", t.lower())
+
+
+def _read_text_url(url: str) -> str:
+    req = Request(url, headers={"User-Agent": "pkmeta/1.0"})
+    with urlopen(req, timeout=20) as resp:
+        return resp.read().decode("utf-8")
 
 
 def _normalize_type(t: str) -> str:
@@ -340,6 +442,342 @@ def load_move_type_map(local_json_path: str = "") -> Dict[str, str]:
     return out
 
 
+def load_pokedex_identity_map(local_json_path: str = "") -> Dict[str, Dict[str, Any]]:
+    global _POKEDEX_IDENTITY_CACHE
+    if _POKEDEX_IDENTITY_CACHE is not None:
+        return _POKEDEX_IDENTITY_CACHE
+
+    data: Any = None
+
+    if local_json_path:
+        try:
+            with open(local_json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+
+    if data is None:
+        for url in POKEDEX_URLS:
+            try:
+                data = _read_json_url(url)
+                break
+            except Exception:
+                data = None
+
+    out: Dict[str, Dict[str, Any]] = {}
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if not isinstance(v, dict):
+                continue
+            kid = _to_id(str(k))
+            if not kid:
+                continue
+            entry = {
+                "key": kid,
+                "name": str(v.get("name") or ""),
+                "num": int(v.get("num") or 0),
+                "base_species": str(v.get("baseSpecies") or ""),
+                "forme": str(v.get("forme") or ""),
+            }
+            out[kid] = entry
+
+    _POKEDEX_IDENTITY_CACHE = out
+    return out
+
+
+def _read_csv_rows(urls: tuple[str, ...]) -> List[Dict[str, str]]:
+    for url in urls:
+        try:
+            txt = _read_text_url(url)
+            return list(csv.DictReader(StringIO(txt)))
+        except Exception:
+            continue
+    return []
+
+
+def _lang_to_pokeapi_id(lang: str) -> int:
+    lang_map = {
+        "en": 9,
+        "fr": 5,
+        "de": 6,
+        "es": 7,
+        "it": 8,
+        "ja": 11,
+        "ko": 3,
+        "zh-hans": 12,
+        "zh-hant": 4,
+    }
+    return lang_map.get(lang, 9)
+
+
+def _normalize_lang(lang: str) -> str:
+    raw = (lang or "en").strip().lower()
+    if raw in {"zh", "zh-cn", "zh-sg", "zh-hans"}:
+        return "zh-hans"
+    if raw in {"zh-tw", "zh-hk", "zh-mo", "zh-hant"}:
+        return "zh-hans"
+    if raw.startswith("fr"):
+        return "fr"
+    if raw.startswith("de"):
+        return "de"
+    if raw.startswith("es"):
+        return "es"
+    if raw.startswith("it"):
+        return "it"
+    if raw.startswith("ja"):
+        return "ja"
+    if raw.startswith("ko"):
+        return "ko"
+    if raw.startswith("en"):
+        return "en"
+    return "en"
+
+
+def _language_url(lang: str) -> str:
+    base = "https://pkmeta.net"
+    return base if lang == "en" else f"{base}/{lang}"
+
+
+def _seo_context_for_lang(lang: str) -> Dict[str, Any]:
+    lang_norm = _normalize_lang(lang)
+    if lang_norm not in SUPPORTED_LANGS:
+        lang_norm = "en"
+
+    copy = SEO_COPY.get(lang_norm, SEO_COPY["en"])
+    canonical = _language_url(lang_norm)
+    alternates = [{"lang": "x-default", "href": _language_url("en")}]
+    alternates.extend({"lang": x, "href": _language_url(x)} for x in SUPPORTED_LANGS)
+
+    return {
+        "lang": lang_norm,
+        "title": copy["title"],
+        "description": copy["description"],
+        "keywords": copy["keywords"],
+        "canonical": canonical,
+        "og_locale": LANG_TO_OG_LOCALE.get(lang_norm, "en_US"),
+        "alternates": alternates,
+        "json_ld": {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "pkmeta.net",
+            "url": canonical,
+            "inLanguage": lang_norm,
+            "description": copy["description"],
+            "keywords": copy["keywords"],
+        },
+    }
+
+
+def _load_species_name_by_id(lang: str) -> Dict[int, str]:
+    rows = _read_csv_rows(POKEMON_SPECIES_NAMES_CSV_URLS)
+    out: Dict[int, str] = {}
+    lang_id = _lang_to_pokeapi_id(lang)
+    for r in rows:
+        try:
+            if int(r.get("local_language_id") or 0) != lang_id:
+                continue
+            sid = int(r.get("pokemon_species_id") or 0)
+            nm = str(r.get("name") or "").strip()
+            if sid > 0 and nm:
+                out[sid] = nm
+        except Exception:
+            continue
+    return out
+
+
+def _load_pokemon_name_by_id(lang: str) -> Dict[int, str]:
+    pokemon_rows = _read_csv_rows(POKEMON_CSV_URLS)
+    out: Dict[int, str] = {}
+    if not pokemon_rows:
+        return out
+
+    lang_id = _lang_to_pokeapi_id(lang)
+    species_name_by_id = _load_species_name_by_id(lang)
+    form_rows = _read_csv_rows(POKEMON_FORM_NAMES_CSV_URLS)
+    forms_rows = _read_csv_rows(POKEMON_FORMS_CSV_URLS)
+    pokemon_id_by_form_id: Dict[int, int] = {}
+    for r in forms_rows:
+        try:
+            form_id = int(r.get("id") or 0)
+            pokemon_id = int(r.get("pokemon_id") or 0)
+            if form_id > 0 and pokemon_id > 0:
+                pokemon_id_by_form_id[form_id] = pokemon_id
+        except Exception:
+            continue
+
+    form_pokemon_name_by_id: Dict[int, str] = {}
+    for r in form_rows:
+        try:
+            if int(r.get("local_language_id") or 0) != lang_id:
+                continue
+            form_id = int(r.get("pokemon_form_id") or 0)
+            full_name = str(r.get("pokemon_name") or "").strip()
+            pokemon_id = pokemon_id_by_form_id.get(form_id, 0)
+            if pokemon_id > 0 and full_name:
+                form_pokemon_name_by_id[pokemon_id] = full_name
+        except Exception:
+            continue
+
+    for r in pokemon_rows:
+        try:
+            pid = int(r.get("id") or 0)
+            sid = int(r.get("species_id") or 0)
+            if pid <= 0:
+                continue
+            nm = form_pokemon_name_by_id.get(pid, species_name_by_id.get(sid, ""))
+            if nm:
+                out[pid] = nm
+        except Exception:
+            continue
+
+    return out
+
+
+def _load_identifier_map_by_id(urls: tuple[str, ...]) -> Dict[int, str]:
+    rows = _read_csv_rows(urls)
+    out: Dict[int, str] = {}
+    for r in rows:
+        try:
+            rid = int(r.get("id") or 0)
+            identifier = str(r.get("identifier") or "").strip()
+            if rid > 0 and identifier:
+                out[rid] = identifier
+        except Exception:
+            continue
+    return out
+
+
+def _load_localized_name_by_id(name_rows_urls: tuple[str, ...], id_col: str, lang: str) -> Dict[int, str]:
+    rows = _read_csv_rows(name_rows_urls)
+    out: Dict[int, str] = {}
+    lang_id = _lang_to_pokeapi_id(lang)
+    for r in rows:
+        try:
+            if int(r.get("local_language_id") or 0) != lang_id:
+                continue
+            rid = int(r.get(id_col) or 0)
+            nm = str(r.get("name") or "").strip()
+            if rid > 0 and nm:
+                out[rid] = nm
+        except Exception:
+            continue
+    return out
+
+
+def _identifier_localized_map(
+    identifier_rows_urls: tuple[str, ...],
+    localized_rows_urls: tuple[str, ...],
+    localized_id_col: str,
+    lang: str,
+) -> Dict[str, str]:
+    ident_by_id = _load_identifier_map_by_id(identifier_rows_urls)
+    local_by_id = _load_localized_name_by_id(localized_rows_urls, localized_id_col, lang)
+    out: Dict[str, str] = {}
+    for rid, identifier in ident_by_id.items():
+        if rid not in local_by_id:
+            continue
+        out[_to_id(identifier)] = local_by_id[rid]
+    return out
+
+
+def load_pokemon_localized_name_map(lang: str = "en") -> Dict[str, str]:
+    lang_norm = _normalize_lang(lang)
+
+    cached = _POKEMON_LOCALIZED_NAME_CACHE.get(lang_norm)
+    if cached is not None:
+        return cached
+
+    identity_map = load_pokedex_identity_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+    out: Dict[str, str] = {}
+
+    pokemon_rows = _read_csv_rows(POKEMON_CSV_URLS)
+    pokemon_name_by_id = _load_pokemon_name_by_id(lang_norm)
+    localized_by_identifier: Dict[str, str] = {}
+    for r in pokemon_rows:
+        try:
+            pid = int(r.get("id") or 0)
+            ident = str(r.get("identifier") or "")
+            loc = pokemon_name_by_id.get(pid, "")
+            if pid > 0 and ident and loc:
+                localized_by_identifier[_to_id(ident)] = loc
+        except Exception:
+            continue
+
+    species_by_num = _load_species_name_by_id(lang_norm)
+
+    for key, info in identity_map.items():
+        en_name = str(info.get("name") or "")
+        num = int(info.get("num") or 0)
+        base_species = str(info.get("base_species") or "")
+        forme = str(info.get("forme") or "")
+
+        candidates = [
+            key,
+            _to_id(en_name),
+            _to_id(f"{base_species}-{forme}"),
+            _to_id(f"{base_species}-{forme}-mask"),
+            _to_id(f"{base_species}-{forme}-style"),
+            _to_id(base_species),
+        ]
+        localized = ""
+        for cid in candidates:
+            if cid and cid in localized_by_identifier:
+                localized = localized_by_identifier[cid]
+                break
+
+        if not localized and num > 0:
+            localized = species_by_num.get(num, "")
+            if localized and forme:
+                localized = f"{localized}-{forme}"
+
+        if not localized:
+            localized = en_name
+
+        out[key] = localized
+        enid = _to_id(en_name)
+        if enid and enid not in out:
+            out[enid] = localized
+
+    _POKEMON_LOCALIZED_NAME_CACHE[lang_norm] = out
+    return out
+
+
+def load_move_localized_name_map(lang: str = "en") -> Dict[str, str]:
+    lang_norm = _normalize_lang(lang)
+
+    cached = _MOVE_LOCALIZED_NAME_CACHE.get(lang_norm)
+    if cached is not None:
+        return cached
+
+    out = _identifier_localized_map(MOVES_CSV_URLS, MOVE_NAMES_CSV_URLS, "move_id", lang_norm)
+    _MOVE_LOCALIZED_NAME_CACHE[lang_norm] = out
+    return out
+
+
+def load_item_localized_name_map(lang: str = "en") -> Dict[str, str]:
+    lang_norm = _normalize_lang(lang)
+
+    cached = _ITEM_LOCALIZED_NAME_CACHE.get(lang_norm)
+    if cached is not None:
+        return cached
+
+    out = _identifier_localized_map(ITEMS_CSV_URLS, ITEM_NAMES_CSV_URLS, "item_id", lang_norm)
+    _ITEM_LOCALIZED_NAME_CACHE[lang_norm] = out
+    return out
+
+
+def load_ability_localized_name_map(lang: str = "en") -> Dict[str, str]:
+    lang_norm = _normalize_lang(lang)
+
+    cached = _ABILITY_LOCALIZED_NAME_CACHE.get(lang_norm)
+    if cached is not None:
+        return cached
+
+    out = _identifier_localized_map(ABILITIES_CSV_URLS, ABILITY_NAMES_CSV_URLS, "ability_id", lang_norm)
+    _ABILITY_LOCALIZED_NAME_CACHE[lang_norm] = out
+    return out
+
+
 # Flask app
 
 def make_app(
@@ -373,8 +811,29 @@ def make_app(
         return resp
 
     @app.get("/")
-    def index() -> str:
-        return render_template("index.html")
+    def index() -> Any:
+        lang_from_query = _normalize_lang(request.args.get("lang", "") or "")
+        if lang_from_query in SUPPORTED_LANGS and lang_from_query != "en":
+            return redirect(f"/{lang_from_query}", code=302)
+        seo = _seo_context_for_lang("en")
+        return render_template("index.html", seo=seo, server_lang=seo["lang"])
+
+    @app.get("/<lang_code>")
+    def index_lang(lang_code: str) -> Any:
+        raw = (lang_code or "").strip().lower()
+        allowed_inputs = set(SUPPORTED_LANGS) | {"zh", "zh-cn", "zh-sg", "zh-tw", "zh-hk", "zh-mo", "zh-hant"}
+        if raw not in allowed_inputs:
+            return Response("Not found", status=404)
+        lang_norm = _normalize_lang(lang_code)
+        if lang_norm not in SUPPORTED_LANGS:
+            return Response("Not found", status=404)
+        if lang_code != lang_norm:
+            target = "/" if lang_norm == "en" else f"/{lang_norm}"
+            return redirect(target, code=301)
+        if lang_norm == "en":
+            return redirect("/", code=301)
+        seo = _seo_context_for_lang(lang_norm)
+        return render_template("index.html", seo=seo, server_lang=seo["lang"])
 
     @app.get("/robots.txt")
     def robots_txt() -> Response:
@@ -389,15 +848,23 @@ def make_app(
 
     @app.get("/sitemap.xml")
     def sitemap_xml() -> Response:
-        xml = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">
-  <url>
-    <loc>https://pkmeta.net/</loc>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-  </url>
-</urlset>
-"""
+        urls = ["https://pkmeta.net/"] + [f"https://pkmeta.net/{lang}" for lang in SUPPORTED_LANGS if lang != "en"]
+        parts = [
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+            "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
+        ]
+        for u in urls:
+            parts.extend(
+                [
+                    "  <url>",
+                    f"    <loc>{u}</loc>",
+                    "    <changefreq>daily</changefreq>",
+                    "    <priority>1.0</priority>",
+                    "  </url>",
+                ]
+            )
+        parts.append("</urlset>")
+        xml = "\n".join(parts) + "\n"
         return Response(xml, mimetype="application/xml")
 
     @app.get("/api/formats")
@@ -481,6 +948,9 @@ def make_app(
     def api_pokemon():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
         q = (request.args.get("q", "") or "").strip().lower()
+        qraw = q
+        qid = _to_id(q)
+        lang = _normalize_lang(request.args.get("lang", "en") or "en")
         selected_types = _parse_types_param(request.args.get("types", "") or "")
         sort = (request.args.get("sort", "winrate") or "winrate").strip()
         order = (request.args.get("order", "desc") or "desc").strip().lower()
@@ -532,6 +1002,7 @@ def make_app(
 
         conn.close()
         poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+        localized_name_map = load_pokemon_localized_name_map(lang)
 
         items: List[Dict[str, Any]] = []
         for r in rows:
@@ -557,6 +1028,20 @@ def make_app(
 
             key = str(r["key"])
             name = str(r["name"])
+            localized_name = localized_name_map.get(key, localized_name_map.get(_to_id(name), name))
+            if qraw:
+                if (
+                    qid
+                    and qid not in _to_id(name)
+                    and qid not in _to_id(key)
+                    and qid not in _to_id(localized_name)
+                    and qraw not in name.lower()
+                    and qraw not in key.lower()
+                    and qraw not in localized_name.lower()
+                ):
+                    continue
+                if not qid and qraw not in name.lower() and qraw not in key.lower() and qraw not in localized_name.lower():
+                    continue
             ptypes = poke_type_map.get(key, [])
             if selected_types and not selected_types.intersection(ptypes):
                 continue
@@ -565,6 +1050,7 @@ def make_app(
                 {
                     "key": key,
                     "name": name,
+                    "localized_name": localized_name,
                     "games": games,
                     "wins": wins,
                     "winrate": winrate,
@@ -615,6 +1101,7 @@ def make_app(
     @app.get("/api/pokemon/<key>/detail")
     def api_pokemon_detail(key: str):
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        lang = _normalize_lang(request.args.get("lang", "en") or "en")
         elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
         elo_max = clamp_int(request.args.get("elo_max", 10000), 0, 10000)
         if elo_min > elo_max:
@@ -765,6 +1252,7 @@ def make_app(
         abilities_map = load_pokedex_abilities_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
         expected_abilities = abilities_map.get(key, abilities_map.get(_to_id(name), []))
         expected_set = set(expected_abilities)
+        ability_localized_map = load_ability_localized_name_map(lang)
 
         abilities_payload: List[Dict[str, Any]] = []
         try:
@@ -778,9 +1266,11 @@ def make_app(
             if total_ab > 0:
                 for r in ab_rows:
                     uses = int(r["uses"])
+                    ability_name = str(r["ability"])
                     abilities_payload.append(
                         {
-                            "ability": str(r["ability"]),
+                            "ability": ability_name,
+                            "localized_ability": ability_localized_map.get(_to_id(ability_name), ability_name),
                             "uses": uses,
                             "pct": uses / total_ab,
                         }
@@ -790,11 +1280,23 @@ def make_app(
 
         conn.close()
         move_type_map = load_move_type_map(os.environ.get("PKMETA_MOVES_JSON", ""))
+        localized_name_map = load_pokemon_localized_name_map(lang)
+        move_localized_map = load_move_localized_name_map(lang)
+        item_localized_map = load_item_localized_name_map(lang)
+        localized_name = localized_name_map.get(key, localized_name_map.get(_to_id(name), name))
 
         if not abilities_payload:
             abilities = expected_abilities
             n = max(1, len(abilities))
-            abilities_payload = [{"ability": a, "uses": 0, "pct": 1.0 / n} for a in abilities]
+            abilities_payload = [
+                {
+                    "ability": a,
+                    "localized_ability": ability_localized_map.get(_to_id(a), a),
+                    "uses": 0,
+                    "pct": 1.0 / n,
+                }
+                for a in abilities
+            ]
 
         base_stats_map = load_pokedex_base_stats_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
         base_stats = base_stats_map.get(key, base_stats_map.get(_to_id(name), {}))
@@ -805,10 +1307,12 @@ def make_app(
         mates_payload = []
         for score, other, g, wr in mates:
             nm = kname(other)
+            local_nm = localized_name_map.get(other, localized_name_map.get(_to_id(nm), nm))
             mates_payload.append(
                 {
                     "key": other,
                     "name": nm,
+                    "localized_name": local_nm,
                     "games": g,
                     "winrate": wr,
                     "score": score,
@@ -819,10 +1323,12 @@ def make_app(
         counters_payload = []
         for score, other, g, wr in counters:
             nm = kname(other)
+            local_nm = localized_name_map.get(other, localized_name_map.get(_to_id(nm), nm))
             counters_payload.append(
                 {
                     "key": other,
                     "name": nm,
+                    "localized_name": local_nm,
                     "games": g,
                     "winrate": 1.0 - wr,
                     "score": score,
@@ -834,6 +1340,7 @@ def make_app(
             {
                 "key": key,
                 "name": name,
+                "localized_name": localized_name,
                 "games": games,
                 "wins": wins,
                 "winrate": winrate,
@@ -851,12 +1358,20 @@ def make_app(
                 "moves": [
                     {
                         "move": str(r["move"]),
+                        "localized_move": move_localized_map.get(_to_id(str(r["move"])), str(r["move"])),
                         "uses": int(r["uses"]),
                         "type": move_type_map.get(_to_id(str(r["move"])), "Unknown"),
                     }
                     for r in moves_rows
                 ],
-                "items": [{"item": str(r["item"]), "uses": int(r["uses"])} for r in items_rows],
+                "items": [
+                    {
+                        "item": str(r["item"]),
+                        "localized_item": item_localized_map.get(_to_id(str(r["item"])), str(r["item"])),
+                        "uses": int(r["uses"]),
+                    }
+                    for r in items_rows
+                ],
                 "abilities": abilities_payload,
                 "base_stats": base_stats,
                 "min_pair_games": min_pair_games,
@@ -896,6 +1411,9 @@ def make_app(
     def api_attacks():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
         q = (request.args.get("q", "") or "").strip().lower()
+        qraw = q
+        qid = _to_id(q)
+        lang = _normalize_lang(request.args.get("lang", "en") or "en")
         selected_types = _parse_types_param(request.args.get("types", "") or request.args.get("type", "") or "")
         sort = (request.args.get("sort", "winrate") or "winrate").strip().lower()
         order = (request.args.get("order", "desc") or "desc").strip().lower()
@@ -948,6 +1466,7 @@ def make_app(
             )
 
         conn.close()
+        move_localized_map = load_move_localized_name_map(lang)
 
         matches = int(matches_row["m"]) if matches_row else 0
         items: List[Dict[str, Any]] = []
@@ -958,14 +1477,27 @@ def make_app(
             sum_elo = int(r["sum_elo"])
             move_name = str(r["move_name"])
             move_id = str(r["move_id"])
+            localized_move_name = move_localized_map.get(_to_id(move_id), move_name)
 
-            if q and q not in move_name.lower() and q not in move_id.lower():
+            if (
+                qraw
+                and qid
+                and qid not in _to_id(move_name)
+                and qid not in _to_id(move_id)
+                and qid not in _to_id(localized_move_name)
+                and qraw not in move_name.lower()
+                and qraw not in move_id.lower()
+                and qraw not in localized_move_name.lower()
+            ):
+                continue
+            if qraw and not qid and qraw not in move_name.lower() and qraw not in move_id.lower() and qraw not in localized_move_name.lower():
                 continue
 
             items.append(
                 {
                     "move_id": move_id,
                     "move_name": move_name,
+                    "localized_move_name": localized_move_name,
                     "move_type": str(r["move_type"]),
                     "games": games,
                     "wins": wins,
