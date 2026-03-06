@@ -848,16 +848,21 @@ def make_app(
 
     @app.get("/sitemap.xml")
     def sitemap_xml() -> Response:
-        urls = ["https://pkmeta.net/"] + [f"https://pkmeta.net/{lang}" for lang in SUPPORTED_LANGS if lang != "en"]
+        langs = ["en"] + [lang for lang in SUPPORTED_LANGS if lang != "en"]
+        urls = [_language_url(lang) for lang in langs]
+        alternates = [(lang, _language_url(lang)) for lang in langs]
+        alternates.insert(0, ("x-default", _language_url("en")))
         parts = [
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
-            "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
+            "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">",
         ]
         for u in urls:
+            alt_lines = [f"    <xhtml:link rel=\"alternate\" hreflang=\"{lang}\" href=\"{href}\" />" for lang, href in alternates]
             parts.extend(
                 [
                     "  <url>",
                     f"    <loc>{u}</loc>",
+                    *alt_lines,
                     "    <changefreq>daily</changefreq>",
                     "    <priority>1.0</priority>",
                     "  </url>",
