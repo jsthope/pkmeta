@@ -78,6 +78,13 @@ def side_from_ident(ident: str) -> Optional[str]:
 def ident_prefix(ident: str) -> str:
     return ident.split(":", 1)[0].strip()  # p1a
 
+
+def token_after_prefix(tokens: List[str], prefix: str) -> Optional[str]:
+    for t in tokens:
+        if t.startswith(prefix):
+            return t[len(prefix):].strip()
+    return None
+
 def hp_ratio(hp_str: str) -> Optional[float]:
     if not hp_str:
         return None
@@ -228,10 +235,31 @@ def parse_log_one_pass(log: str) -> Optional[ParsedMatch]:
             if side not in ("p1", "p2"):
                 continue
 
-            ip = ident_prefix(ident)
+            extra = parts[4:]
+            from_move = token_after_prefix(extra, "[from] move:")
+            from_ability = token_after_prefix(extra, "[from] ability:")
+            of_ident = token_after_prefix(extra, "[of] ")
+
+            if from_move:
+                # Ability changed by move (e.g. Entrainment), not a native reveal.
+                continue
+
+            target_ident = ident
+            if from_ability:
+                if from_ability == "Trace" and of_ident:
+                    # Trace reveals the target's ability; attribute to [of].
+                    target_ident = of_ident
+                    side = side_from_ident(target_ident)
+                    if side not in ("p1", "p2"):
+                        continue
+                else:
+                    # Other ability-sourced changes are usually temporary/replaced states.
+                    continue
+
+            ip = ident_prefix(target_ident)
             k = active_key.get(ip)
-            if not k and ":" in ident:
-                sp = clean_species(ident.split(":", 1)[1])
+            if not k and ":" in target_ident:
+                sp = clean_species(target_ident.split(":", 1)[1])
                 k, _ = canonicalize_species(sp)
             if not k:
                 continue

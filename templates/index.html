@@ -33,7 +33,7 @@
 <body>
   <div class="page">
     <header class="top">
-      <h1>pkmeta.net <span>- Pokemon Stats from Showdown</span></h1>
+      <h1>Pkmeta <span>- Pokemon Stats from Showdown</span></h1>
       <div class="topRight">
         <a class="githubLink" href="https://github.com/jsthope/pkmeta" target="_blank" rel="noopener noreferrer" aria-label="View the GitHub repository">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -201,19 +201,43 @@ function setItemIcon(img, itemName) {
     `${ITEM_ICON_BASE}${tid}.png`,
     `${ITEM_ICON_BASE}${tid}.gif`,
   );
-  img.dataset.tries = JSON.stringify(tries);
-  img.src = tries[0];
-  img.onerror = function() {
-    let arr = [];
-    try { arr = JSON.parse(this.dataset.tries || "[]"); } catch(e) { arr = []; }
-    arr.shift();
-    if (arr.length) {
-      this.dataset.tries = JSON.stringify(arr);
-      this.src = arr[0];
-    } else {
-      this.style.display = "none";
+  img.loading = "lazy";
+  img.decoding = "async";
+
+  let idx = 0;
+  let done = false;
+  let tm = null;
+
+  const clearTm = () => {
+    if (tm) {
+      clearTimeout(tm);
+      tm = null;
     }
   };
+
+  const tryNext = () => {
+    clearTm();
+    if (done) return;
+    if (idx >= tries.length) {
+      done = true;
+      img.style.display = "none";
+      return;
+    }
+    img.src = tries[idx++];
+    tm = setTimeout(() => {
+      if (!done) tryNext();
+    }, 1000);
+  };
+
+  img.onload = () => {
+    done = true;
+    clearTm();
+  };
+  img.onerror = () => {
+    tryNext();
+  };
+
+  tryNext();
 }
 
 function preferAniFirst(spriteUrls) {
@@ -245,7 +269,7 @@ const attackSortState = {
 };
 
 const typeFilterState = {
-  selected: [],
+  selected: "",
 };
 
 let activeView = "pokemon";
@@ -269,10 +293,10 @@ function typeIconUrl(typeName) {
 }
 
 function updateTypeButtonsUI() {
-  const selectedSet = new Set(typeFilterState.selected);
+  const selected = typeFilterState.selected || "";
   document.querySelectorAll("#type_filter_wrap .typeBtn").forEach(btn => {
     const t = btn.dataset.type || "";
-    const isActive = t === "" ? (selectedSet.size === 0) : selectedSet.has(t);
+    const isActive = t === "" ? !selected : selected === t;
     btn.classList.toggle("isActive", isActive);
     btn.setAttribute("aria-pressed", isActive ? "true" : "false");
   });
@@ -280,14 +304,8 @@ function updateTypeButtonsUI() {
 
 function setTypeFilter(typeName) {
   const t = (typeName || "").trim();
-  if (!t) {
-    typeFilterState.selected = [];
-  } else {
-    const set = new Set(typeFilterState.selected);
-    if (set.has(t)) set.delete(t);
-    else set.add(t);
-    typeFilterState.selected = Array.from(set);
-  }
+  if (!t) typeFilterState.selected = "";
+  else typeFilterState.selected = (typeFilterState.selected === t) ? "" : t;
   updateTypeButtonsUI();
   loadList();
   loadAttacks();
@@ -403,7 +421,7 @@ function getFilters() {
   let elo_min = parseInt(el("elo_min").value || "0", 10);
   let elo_max = parseInt(el("elo_max").value || "0", 10);
   if (elo_min > elo_max) { const t = elo_min; elo_min = elo_max; elo_max = t; }
-  const selectedTypes = Array.isArray(typeFilterState.selected) ? typeFilterState.selected.slice() : [];
+  const selectedType = (typeFilterState.selected || "").trim();
 
   return {
     formatid,
@@ -411,8 +429,8 @@ function getFilters() {
     sort: sortState.key,
     order: sortState.order,
     min_games,
-    selected_types: selectedTypes,
-    types_csv: selectedTypes.join(","),
+    selected_type: selectedType,
+    types_csv: selectedType,
     attack_sort: attackSortState.key,
     attack_order: attackSortState.order,
     limit,
@@ -509,8 +527,8 @@ async function initTypeFilters() {
   const data = await res.json();
 
   const types = Array.isArray(data.types) ? data.types : [];
-  if (typeFilterState.selected.length) {
-    typeFilterState.selected = typeFilterState.selected.filter(t => types.includes(t));
+  if (typeFilterState.selected && !types.includes(typeFilterState.selected)) {
+    typeFilterState.selected = "";
   }
   renderTypeButtons(types);
 }
@@ -650,7 +668,7 @@ async function loadList() {
     const firstSrc = srcs.length ? srcs[0] : "";
     td0.innerHTML = `
       <div class="poke">
-        <img data-srcs='${JSON.stringify(srcs)}' src="${firstSrc}" alt="" />
+        <img data-srcs='${JSON.stringify(srcs)}' src="${firstSrc}" alt="" loading="lazy" decoding="async" />
         <div>
           <div class="pokeNameLine"><b>${escapeHtml(r.name)}</b>${typeIconsHtml(r.types)}</div>
           <div class="muted">${r.games} games • ${r.wins} wins</div>
@@ -679,7 +697,7 @@ function miniRowHtml(x) {
   const first = s.length ? s[0] : "";
   return `
     <div class="minirow">
-      <img data-srcs='${JSON.stringify(s)}' src="${first}" alt=""/>
+      <img data-srcs='${JSON.stringify(s)}' src="${first}" alt="" loading="lazy" decoding="async"/>
       <div>
         <div class="miniName">${escapeHtml(x.name)}</div>
         <div class="miniMeta">${x.games} games • winrate ${fmtPct(x.winrate)} • score ${(Number(x.score||0)*100).toFixed(1)}%</div>
@@ -718,7 +736,7 @@ async function loadDetail(key, nameHint) {
       <div class="detailGrid">
         <div class="card">
           <div class="heroRow">
-            <img id="hero_img" class="heroSprite" data-srcs='${JSON.stringify(spriteList)}' src="${spriteList[0] || ""}" alt=""/>
+            <img id="hero_img" class="heroSprite" data-srcs='${JSON.stringify(spriteList)}' src="${spriteList[0] || ""}" alt="" decoding="async"/>
             <div>
               <div class="heroTitle">${escapeHtml(d.name)}</div>
               <div class="heroSub">
@@ -799,7 +817,7 @@ async function loadDetail(key, nameHint) {
       const p = (100 * u / itemsTot);
       return `<div class="listLine">
         <div style="display:flex; align-items:center; gap:10px;">
-          <img class="itemico" id="itimg_${idx}" alt=""/>
+          <img class="itemico" id="itimg_${idx}" alt="" loading="lazy" decoding="async"/>
           <div>${escapeHtml(x.item)}</div>
         </div>
         <div class="mono">${u} <span class="muted">(${fmtPct1(p)})</span></div>
