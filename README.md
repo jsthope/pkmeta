@@ -1,5 +1,3 @@
-mostly vibecoded ._. zZz
-
 # Pkmeta
 
 Various statistics on the current showdown meta :)
