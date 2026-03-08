@@ -490,6 +490,15 @@ tbody tr.clickable:hover{ background: #303030; }
   letter-spacing: .1px;
 }
 
+.mobileStatLabel{
+  display: none;
+}
+
+.mobileStatValue{
+  font-size: inherit;
+  font-weight: inherit;
+}
+
 @media (max-width: 720px){
   :root{ --spriteTable: 48px; }
   .poke{ min-width: unset; }
@@ -776,3 +785,258 @@ tbody tr.clickable:hover{ background: #303030; }
 img[src$=".gif"]{ filter: none !important; }
 
 html.modal-open body{ overflow: hidden; }
+
+@media (max-width: 720px){
+  .page{
+    margin: 18px auto 32px;
+    padding: 0 12px;
+  }
+
+  .top{
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .top h1{
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    line-height: 1;
+    text-align: center;
+  }
+
+  .top h1 span{
+    display: none;
+  }
+
+  .topRight{
+    align-items: stretch;
+    justify-content: flex-start;
+    margin-top: -10px;
+  }
+
+  .langSelectWrap,
+  .githubLink{
+    flex: 0 0 auto;
+  }
+
+  .bar{
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .tabs{
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tabBtn{
+    width: 100%;
+  }
+
+  .typeFilter{
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .tableWrap{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table{
+    min-width: 760px;
+  }
+
+  #panel_pokemon .tableWrap{
+    overflow: visible;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+
+  #panel_pokemon table,
+  #panel_pokemon thead,
+  #panel_pokemon tbody,
+  #panel_pokemon tr,
+  #panel_pokemon td{
+    display: block;
+  }
+
+  #panel_pokemon table{
+    min-width: 0;
+  }
+
+  #panel_pokemon thead{
+    display: none;
+  }
+
+  #panel_pokemon tbody{
+    display: grid;
+    gap: 10px;
+  }
+
+  #panel_pokemon tbody tr{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px;
+    border-radius: var(--r20);
+    border: 1px solid var(--stroke);
+    background: #262626;
+    box-shadow: var(--shadow);
+  }
+
+  #panel_pokemon tbody td{
+    padding: 0;
+    border: 0;
+  }
+
+  #panel_pokemon tbody td:first-child{
+    grid-column: 1 / -1;
+    padding-bottom: 4px;
+  }
+
+  #panel_pokemon .mobileStat{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 6px;
+    background: #2f2f2f;
+  }
+
+  #panel_pokemon .mobileStatLabel{
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.15;
+  }
+
+  #panel_pokemon .mobileStatValue{
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text);
+    text-align: right;
+  }
+
+  .poke{
+    gap: 10px;
+  }
+
+  .poke b{
+    display: inline-block;
+    line-height: 1.2;
+  }
+
+  .modalBack{
+    padding: 10px;
+    align-items: flex-end;
+  }
+
+  .modal{
+    width: 100%;
+    max-height: min(92vh, 100%);
+  }
+
+  .modalBody{
+    padding: 12px;
+  }
+
+  .heroRow{
+    align-items: flex-start;
+  }
+
+  .heroTitle{
+    font-size: 18px;
+  }
+
+  .heroSub{
+    gap: 6px;
+  }
+
+  .chip{
+    padding: 6px 8px;
+  }
+
+  .listLine,
+  .abilityRow,
+  .minirow{
+    align-items: flex-start;
+  }
+
+  .listLine{
+    flex-direction: column;
+  }
+
+  .abilityRow{
+    flex-wrap: wrap;
+  }
+
+  .abilityName{
+    white-space: normal;
+  }
+
+  .minirow{
+    gap: 10px;
+  }
+
+  .detailGrid[style*="margin-top: 14px"],
+  .card > div[style*="grid-template-columns: 1fr 1fr"]{
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 480px){
+  :root{
+    --spriteHero: 78px;
+    --spriteMini: 40px;
+    --itemIco: 26px;
+  }
+
+  .brandMark{
+    width: 52px;
+    height: 52px;
+  }
+
+  .top h1{
+    gap: 8px;
+    font-size: 26px;
+    margin-bottom: 0;
+  }
+
+  .githubLink{
+    width: 100%;
+    justify-content: center;
+  }
+
+  .typeBtn{
+    min-width: 32px;
+  }
+
+  #panel_pokemon tbody tr{
+    grid-template-columns: 1fr;
+  }
+
+  .moveWithType,
+  .attackNameWrap,
+  .pokeNameLine{
+    flex-wrap: wrap;
+  }
+
+  .statBarRowInline{
+    gap: 6px;
+  }
+
+  .statName{
+    width: 28px;
+  }
+
+  .statNum{
+    width: 26px;
+  }
+}

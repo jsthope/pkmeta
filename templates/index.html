@@ -1084,6 +1084,10 @@ function attackNameWithTypeHtml(name, typeName) {
   return `<div class="attackNameWrap"><span>${escapeHtml(name || "-")}</span>${typeIconsHtml([typeName || "Unknown"])}</div>`;
 }
 
+function pokemonStatCellHtml(label, value) {
+  return `<div class="mobileStat"><span class="mobileStatLabel">${escapeHtml(label)}</span><b class="mobileStatValue">${escapeHtml(value)}</b></div>`;
+}
+
 function prewarmDetailIfNeeded(items, f) {
   if (hasPrewarmedDetail) return;
   const first = Array.isArray(items) ? items.find(x => x && x.key) : null;
@@ -1194,14 +1198,14 @@ async function loadList() {
     const img = td0.querySelector("img");
     img.onerror = function() { nextSprite(this); };
 
-    const td1 = document.createElement("td"); td1.textContent = fmtPct(r.winrate); tr.appendChild(td1);
-    const td2 = document.createElement("td"); td2.textContent = `${r.games}`; tr.appendChild(td2);
-    const td3 = document.createElement("td"); td3.textContent = fmtPct(r.popularity); tr.appendChild(td3);
-    const td4 = document.createElement("td"); td4.textContent = fmtPct(r.lead_rate); tr.appendChild(td4);
-    const td5 = document.createElement("td"); td5.textContent = fmt1(r.kd); tr.appendChild(td5);
-    const td6 = document.createElement("td"); td6.textContent = fmt1(r.dmg_dealt_avg); tr.appendChild(td6);
-    const td7 = document.createElement("td"); td7.textContent = fmt1(r.dmg_taken_avg); tr.appendChild(td7);
-    const td8 = document.createElement("td"); td8.textContent = fmt1(r.avg_elo); tr.appendChild(td8);
+    const td1 = document.createElement("td"); td1.innerHTML = pokemonStatCellHtml(t("winrate"), fmtPct(r.winrate)); tr.appendChild(td1);
+    const td2 = document.createElement("td"); td2.innerHTML = pokemonStatCellHtml(t("games"), `${r.games}`); tr.appendChild(td2);
+    const td3 = document.createElement("td"); td3.innerHTML = pokemonStatCellHtml(t("popularity"), fmtPct(r.popularity)); tr.appendChild(td3);
+    const td4 = document.createElement("td"); td4.innerHTML = pokemonStatCellHtml(t("leadRate"), fmtPct(r.lead_rate)); tr.appendChild(td4);
+    const td5 = document.createElement("td"); td5.innerHTML = pokemonStatCellHtml("K/D", fmt1(r.kd)); tr.appendChild(td5);
+    const td6 = document.createElement("td"); td6.innerHTML = pokemonStatCellHtml(t("dmgDealt"), fmt1(r.dmg_dealt_avg)); tr.appendChild(td6);
+    const td7 = document.createElement("td"); td7.innerHTML = pokemonStatCellHtml(t("dmgTaken"), fmt1(r.dmg_taken_avg)); tr.appendChild(td7);
+    const td8 = document.createElement("td"); td8.innerHTML = pokemonStatCellHtml(t("avgElo"), fmt1(r.avg_elo)); tr.appendChild(td8);
 
     tbody.appendChild(tr);
   }
