@@ -92,6 +92,7 @@
       <div class="tabs" role="tablist" aria-label="Stats views">
         <button id="tab_pokemon" class="tabBtn isActive" role="tab" aria-selected="true">Pokemon</button>
         <button id="tab_attacks" class="tabBtn" role="tab" aria-selected="false">Attacks</button>
+        <button id="tab_teams" class="tabBtn" role="tab" aria-selected="false">Teams</button>
       </div>
       <div id="type_filter_wrap" class="typeFilter" aria-label="Type filter"></div>
     </div>
@@ -159,7 +160,86 @@
               <th data-attack-sort="avg_elo">Avg ELO <span class="sortInd"></span></th>
             </tr>
           </thead>
-          <tbody id="attack_rows"></tbody>
+          <tbody id="attack_rows">
+            {% for a in home.attack_rows %}
+            <tr>
+              <td>
+                <div class="attackNameWrap">
+                  <span>{{ a.localized_move_name or a.move_name or a.move_id }}</span>
+                  {% if a.move_type %}
+                  <div class="typeIcons">
+                    <img src="https://cdn.jsdelivr.net/gh/partywhale/pokemon-type-icons@main/icons/{{ a.move_type|lower }}.svg" alt="{{ a.move_type }}" title="{{ a.move_type }}"/>
+                  </div>
+                  {% endif %}
+                </div>
+              </td>
+              <td>{{ '%.1f'|format(a.winrate * 100) }}%</td>
+              <td>{{ a.games }}</td>
+              <td>{{ a.uses }}</td>
+              <td>{{ '%.1f'|format(a.avg_elo) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="panel_teams" class="tabPanel">
+      <div class="teamControls">
+        <label><span id="lbl_team_size">Team size</span>
+          <select id="combo_size">
+            <option value="6" selected>6</option>
+            <option value="5">5</option>
+            <option value="4">4</option>
+            <option value="3">3</option>
+            <option value="2">2</option>
+          </select>
+        </label>
+        <div class="teamFilterGroup">
+          <span id="lbl_team_members">Team filter</span>
+          <div id="team_member_slots" class="teamMemberSlots"></div>
+        </div>
+        <div id="team_picker" class="teamPicker isHidden" role="dialog" aria-modal="false" aria-label="Pokemon picker">
+          <div class="teamPickerSearchWrap">
+            <input id="team_picker_search" class="teamPickerSearch" type="text" placeholder="Search Pokemon" />
+          </div>
+          <div id="team_picker_list" class="teamPickerList"></div>
+        </div>
+      </div>
+      <div class="tableWrap">
+        <table>
+          <thead id="teamHead">
+            <tr>
+              <th data-team-sort="name">Composition <span class="sortInd"></span></th>
+              <th data-team-sort="winrate">Winrate <span class="sortInd"></span></th>
+              <th data-team-sort="games">Games <span class="sortInd"></span></th>
+              <th data-team-sort="popularity">Popularity <span class="sortInd"></span></th>
+              <th data-team-sort="avg_elo">Avg ELO <span class="sortInd"></span></th>
+            </tr>
+          </thead>
+          <tbody id="team_rows">
+            {% for item in home.team_rows %}
+            <tr>
+              <td>
+                <div class="teamComp">
+                  <div class="teamSprites">
+                    {% for member in item.members %}
+                    <img data-srcs='{{ member.sprite_urls | tojson }}' src="{{ member.sprite_urls[0] if member.sprite_urls else '' }}" alt="" loading="lazy" decoding="async" />
+                    {% endfor %}
+                  </div>
+                  <div>
+                    <div class="teamNames"><b>{{ item.label }}</b></div>
+                    <div class="muted">{{ item.combo_size }} pokemon • {{ item.games }} games • {{ item.wins }} wins</div>
+                  </div>
+                </div>
+              </td>
+              <td><div class="mobileStat"><span class="mobileStatLabel">Winrate</span><b class="mobileStatValue">{{ '%.1f'|format(item.winrate * 100) }}%</b></div></td>
+              <td><div class="mobileStat"><span class="mobileStatLabel">Games</span><b class="mobileStatValue">{{ item.games }}</b></div></td>
+              <td><div class="mobileStat"><span class="mobileStatLabel">Popularity</span><b class="mobileStatValue">{{ '%.1f'|format(item.popularity * 100) }}%</b></div></td>
+              <td><div class="mobileStat"><span class="mobileStatLabel">Avg ELO</span><b class="mobileStatValue">{{ '%.1f'|format(item.avg_elo) }}</b></div></td>
+            </tr>
+            {% endfor %}
+          </tbody>
         </table>
       </div>
     </div>
@@ -227,6 +307,7 @@
 <script>
 const el = (id) => document.getElementById(id);
 const SERVER_LANG = {{ server_lang | tojson }};
+const INITIAL_STATE = {{ home.initial_state | tojson }};
 
 const ITEM_ICON_BASE = "https://play.pokemonshowdown.com/sprites/itemicons/";
 const BULBA_FILEPATH_BASE = "https://archives.bulbagarden.net/wiki/Special:FilePath/";
@@ -379,8 +460,9 @@ function preferAniFirst(spriteUrls) {
 }
 
 const viewSearchState = {
-  pokemon: { q: "", min_games: "5000", limit: "200" },
-  attacks: { q: "", min_games: "5000", limit: "200" },
+  pokemon: { q: "", min_games: String((INITIAL_STATE.pokemon || {}).min_games || 5000), limit: String(INITIAL_STATE.limit || 200) },
+  attacks: { q: "", min_games: String((INITIAL_STATE.attacks || {}).min_games || 5000), limit: String(INITIAL_STATE.limit || 200) },
+  teams: { q: "", min_games: String((INITIAL_STATE.teams || {}).min_games || 50), limit: String(INITIAL_STATE.limit || 200), combo_size: String((INITIAL_STATE.teams || {}).combo_size || 6), members: ["", "", "", "", ""] },
 };
 
 function saveSearchStateForView(view) {
@@ -389,6 +471,12 @@ function saveSearchStateForView(view) {
   s.q = el("q").value;
   s.min_games = el("min_games").value;
   s.limit = el("limit").value;
+  if (Object.prototype.hasOwnProperty.call(s, "combo_size") && el("combo_size")) {
+    s.combo_size = el("combo_size").value;
+  }
+  if (Array.isArray(s.members)) {
+    s.members = teamMemberFilters.slice();
+  }
 }
 
 function restoreSearchStateForView(view) {
@@ -397,6 +485,12 @@ function restoreSearchStateForView(view) {
   el("q").value = s.q ?? "";
   el("min_games").value = s.min_games ?? "5000";
   el("limit").value = s.limit ?? "200";
+  if (Object.prototype.hasOwnProperty.call(s, "combo_size") && el("combo_size")) {
+    el("combo_size").value = s.combo_size ?? "6";
+  }
+  if (Array.isArray(s.members)) {
+    for (let i = 0; i < teamMemberFilters.length; i++) teamMemberFilters[i] = s.members[i] || "";
+  }
 }
 
 const debouncedLoadActive = (() => {
@@ -408,7 +502,8 @@ const debouncedLoadActive = (() => {
       saveSearchStateForView(targetView);
       if (targetView !== activeView) return;
       if (targetView === "pokemon") loadList();
-      else loadAttacks();
+      else if (targetView === "attacks") loadAttacks();
+      else loadTeams();
     }, 140);
   };
 })();
@@ -423,18 +518,32 @@ const attackSortState = {
   order: "desc",
 };
 
+const teamSortState = {
+  key: "popularity",
+  order: "desc",
+};
+
 const typeFilterState = {
   pokemon: "",
   attacks: "",
+  teams: "",
 };
 
 const typeOptionsCache = {
   pokemon: { key: "", types: [] },
   attacks: { key: "", types: [] },
+  teams: { key: "", types: [] },
 };
+
+let pokemonPickerOptions = Array.isArray(INITIAL_STATE.pokemon_picker_options) ? INITIAL_STATE.pokemon_picker_options : null;
+let activeTeamSlotIndex = -1;
+const teamMemberFilters = ["", "", "", "", ""];
 
 let activeView = "pokemon";
 let hasPrewarmedDetail = false;
+let usedInitialPokemon = false;
+let usedInitialAttacks = false;
+let usedInitialTeams = false;
 
 function applyI18n() {
   document.documentElement.lang = currentLang;
@@ -446,6 +555,10 @@ function applyI18n() {
   el("lbl_elo_range").textContent = t("eloRange");
   el("tab_pokemon").textContent = t("tabPokemon");
   el("tab_attacks").textContent = t("tabAttacks");
+  el("tab_teams").textContent = t("tabTeams");
+  el("lbl_team_size").textContent = t("teamSize");
+  el("lbl_team_members").textContent = t("teamFilter");
+  el("team_picker_search").placeholder = t("searchPokemon");
   el("modalClose").textContent = t("closeEsc");
   if (!el("meta").textContent || /loading|chargement/i.test(el("meta").textContent)) {
     el("meta").textContent = t("loadingDots");
@@ -482,10 +595,40 @@ function applyI18n() {
     th.childNodes[0].textContent = (attackHeaders[key] || key) + " ";
     if (ind && !th.contains(ind)) th.appendChild(ind);
   });
+
+  const teamHeaders = {
+    name: t("teamComposition"),
+    winrate: t("winrate"),
+    games: t("games"),
+    popularity: t("popularity"),
+    avg_elo: t("avgElo"),
+  };
+  document.querySelectorAll("#teamHead th[data-team-sort]").forEach(th => {
+    const key = th.dataset.teamSort;
+    const ind = th.querySelector(".sortInd");
+    th.childNodes[0].textContent = (teamHeaders[key] || key) + " ";
+    if (ind && !th.contains(ind)) th.appendChild(ind);
+  });
+
+  const pokemonMobileLabels = [t("winrate"), t("games"), t("popularity"), t("leadRate"), "K/D", t("dmgDealt"), t("dmgTaken"), t("avgElo")];
+  document.querySelectorAll("#rows tr").forEach(tr => {
+    tr.querySelectorAll(".mobileStatLabel").forEach((labelEl, idx) => {
+      if (pokemonMobileLabels[idx]) labelEl.textContent = pokemonMobileLabels[idx];
+    });
+  });
+
+  const teamMobileLabels = [t("winrate"), t("games"), t("popularity"), t("avgElo")];
+  document.querySelectorAll("#team_rows tr").forEach(tr => {
+    tr.querySelectorAll(".mobileStatLabel").forEach((labelEl, idx) => {
+      if (teamMobileLabels[idx]) labelEl.textContent = teamMobileLabels[idx];
+    });
+  });
+
+  renderTeamMemberSlots();
 }
 
 function setView(view) {
-  const nextView = (view === "attacks") ? "attacks" : "pokemon";
+  const nextView = (view === "attacks" || view === "teams") ? view : "pokemon";
   if (nextView !== activeView) {
     saveSearchStateForView(activeView);
     activeView = nextView;
@@ -493,13 +636,19 @@ function setView(view) {
   }
 
   const isPokemon = activeView === "pokemon";
+  const isAttacks = activeView === "attacks";
+  const isTeams = activeView === "teams";
   el("tab_pokemon").classList.toggle("isActive", isPokemon);
-  el("tab_attacks").classList.toggle("isActive", !isPokemon);
+  el("tab_attacks").classList.toggle("isActive", isAttacks);
+  el("tab_teams").classList.toggle("isActive", isTeams);
   el("tab_pokemon").setAttribute("aria-selected", isPokemon ? "true" : "false");
-  el("tab_attacks").setAttribute("aria-selected", isPokemon ? "false" : "true");
+  el("tab_attacks").setAttribute("aria-selected", isAttacks ? "true" : "false");
+  el("tab_teams").setAttribute("aria-selected", isTeams ? "true" : "false");
 
   el("panel_pokemon").classList.toggle("isActive", isPokemon);
-  el("panel_attacks").classList.toggle("isActive", !isPokemon);
+  el("panel_attacks").classList.toggle("isActive", isAttacks);
+  el("panel_teams").classList.toggle("isActive", isTeams);
+  renderTeamMemberSlots();
   updateTypeButtonsUI();
 }
 
@@ -532,7 +681,8 @@ function setTypeFilter(typeName) {
   else typeFilterState[activeView] = (curr === t) ? "" : t;
   updateTypeButtonsUI();
   if (activeView === "pokemon") loadList();
-  else loadAttacks();
+  else if (activeView === "attacks") loadAttacks();
+  else loadTeams();
 }
 
 function renderTypeButtons(types) {
@@ -570,12 +720,113 @@ function renderTypeButtons(types) {
   updateTypeButtonsUI();
 }
 
+function selectedTeamMemberKeys() {
+  return teamMemberFilters.map(x => (x || "").trim()).filter(Boolean);
+}
+
+async function ensurePokemonPickerOptions() {
+  if (Array.isArray(pokemonPickerOptions)) return pokemonPickerOptions;
+  try {
+    const res = await fetch(`/api/pokemon_options?lang=${encodeURIComponent(currentLang)}`);
+    const data = await res.json();
+    pokemonPickerOptions = Array.isArray(data.items) ? data.items : [];
+  } catch (e) {
+    pokemonPickerOptions = [];
+  }
+  return pokemonPickerOptions;
+}
+
+function pokemonPickerOptionByKey(key) {
+  if (!Array.isArray(pokemonPickerOptions)) return null;
+  return pokemonPickerOptions.find(x => x && x.key === key) || null;
+}
+
+function renderTeamMemberSlots() {
+  const wrap = el("team_member_slots");
+  wrap.innerHTML = "";
+  for (let i = 0; i < 5; i++) {
+    const key = teamMemberFilters[i] || "";
+    const option = pokemonPickerOptionByKey(key);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "teamMemberSlot" + (key ? " isFilled" : "");
+    btn.dataset.index = String(i);
+    btn.setAttribute("aria-label", option ? (option.localized_name || option.name || option.key) : t("addPokemon"));
+    if (option) {
+      const srcs = Array.isArray(option.sprite_urls) ? option.sprite_urls : [];
+      btn.innerHTML = `<img data-srcs='${JSON.stringify(srcs)}' src="${srcs[0] || ""}" alt="" loading="lazy" decoding="async" /><span>${escapeHtml(option.localized_name || option.name || option.key)}</span><span class="teamMemberClear" data-clear-index="${i}" title="${escapeHtml(t("clearSlot"))}">×</span>`;
+    } else {
+      btn.innerHTML = `<span class="teamMemberPlus">+</span><span>${escapeHtml(t("addPokemon"))}</span>`;
+    }
+    wrap.appendChild(btn);
+  }
+  wrap.querySelectorAll("img[data-srcs]").forEach(img => {
+    img.onerror = function() { nextSprite(this); };
+  });
+}
+
+function closeTeamPicker() {
+  activeTeamSlotIndex = -1;
+  el("team_picker").classList.add("isHidden");
+}
+
+function renderTeamPickerList() {
+  const list = el("team_picker_list");
+  const q = normalizeForSearch(el("team_picker_search").value || "");
+  const selected = new Set(selectedTeamMemberKeys());
+  const options = Array.isArray(pokemonPickerOptions) ? pokemonPickerOptions : [];
+  const filtered = options.filter(option => {
+    if (!option || !option.key) return false;
+    if (selected.has(option.key) && option.key !== (teamMemberFilters[activeTeamSlotIndex] || "")) return false;
+    if (!q) return true;
+    return normalizeForSearch(option.localized_name || "").includes(q) || normalizeForSearch(option.name || "").includes(q) || normalizeForSearch(option.key || "").includes(q);
+  }).slice(0, 120);
+
+  list.innerHTML = "";
+  if (!filtered.length) {
+    list.innerHTML = `<div class="teamPickerEmpty">${escapeHtml(t("noTeamData"))}</div>`;
+    return;
+  }
+  for (const option of filtered) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "teamPickerOption";
+    row.dataset.key = option.key;
+    const srcs = Array.isArray(option.sprite_urls) ? option.sprite_urls : [];
+    row.innerHTML = `<img data-srcs='${JSON.stringify(srcs)}' src="${srcs[0] || ""}" alt="" loading="lazy" decoding="async" /><span>${escapeHtml(option.localized_name || option.name || option.key)}</span>`;
+    list.appendChild(row);
+  }
+  list.querySelectorAll("img[data-srcs]").forEach(img => {
+    img.onerror = function() { nextSprite(this); };
+  });
+}
+
+async function openTeamPicker(index) {
+  activeTeamSlotIndex = index;
+  el("team_picker").classList.remove("isHidden");
+  el("team_picker_list").innerHTML = `<div class="teamPickerEmpty">${escapeHtml(t("loadingDots"))}</div>`;
+  el("team_picker_search").placeholder = t("searchPokemon");
+  el("team_picker_search").value = "";
+  await ensurePokemonPickerOptions();
+  renderTeamMemberSlots();
+  renderTeamPickerList();
+  requestAnimationFrame(() => el("team_picker_search").focus());
+}
+
+function applyTeamMemberFilters() {
+  if (activeView === "teams") loadTeams();
+}
+
 function defaultOrderForKey(k){
   return (k === "name") ? "asc" : "desc";
 }
 
 function defaultOrderForAttack(k){
   return (k === "move" || k === "type") ? "asc" : "desc";
+}
+
+function defaultOrderForTeam(k){
+  return (k === "name") ? "asc" : "desc";
 }
 
 function updateSortIndicators(){
@@ -614,6 +865,24 @@ function updateAttackSortIndicators(){
   });
 }
 
+function updateTeamSortIndicators(){
+  document.querySelectorAll('#teamHead th[data-team-sort]').forEach(th => {
+    const k = th.dataset.teamSort;
+    const ind = th.querySelector(".sortInd");
+    th.classList.remove("isActive");
+    th.removeAttribute("aria-sort");
+
+    if (k === teamSortState.key){
+      th.classList.add("isActive");
+      const arrow = (teamSortState.order === "asc") ? "▲" : "▼";
+      if (ind) ind.textContent = arrow;
+      th.setAttribute("aria-sort", teamSortState.order === "asc" ? "ascending" : "descending");
+    } else {
+      if (ind) ind.textContent = "";
+    }
+  });
+}
+
 function setSort(k){
   if (sortState.key === k){
     sortState.order = (sortState.order === "asc") ? "desc" : "asc";
@@ -634,6 +903,17 @@ function setAttackSort(k){
   }
   updateAttackSortIndicators();
   loadAttacks();
+}
+
+function setTeamSort(k){
+  if (teamSortState.key === k){
+    teamSortState.order = (teamSortState.order === "asc") ? "desc" : "asc";
+  } else {
+    teamSortState.key = k;
+    teamSortState.order = defaultOrderForTeam(k);
+  }
+  updateTeamSortIndicators();
+  loadTeams();
 }
 
 function getFilters() {
@@ -657,6 +937,11 @@ function getFilters() {
     types_csv: selectedType,
     attack_sort: attackSortState.key,
     attack_order: attackSortState.order,
+    team_sort: teamSortState.key,
+    team_order: teamSortState.order,
+    combo_size: parseInt((el("combo_size") && el("combo_size").value) || "6", 10),
+    members: selectedTeamMemberKeys(),
+    members_csv: selectedTeamMemberKeys().join(","),
     limit,
     elo_min,
     elo_max,
@@ -692,6 +977,171 @@ function updateEloUI(changed) {
 
   if (changed === "min") { smin.style.zIndex = "5"; smax.style.zIndex = "4"; }
   else if (changed === "max") { smax.style.zIndex = "5"; smin.style.zIndex = "4"; }
+}
+
+function matchesInitialWindow() {
+  return el("formatid").value === INITIAL_STATE.default_format &&
+    parseInt(el("elo_min").value || "0", 10) === Number(INITIAL_STATE.elo_min || 0) &&
+    parseInt(el("elo_max").value || "0", 10) === Number(INITIAL_STATE.elo_max || 0);
+}
+
+function setDefaultMeta() {
+  el("meta").textContent = `${t("formatMeta")}: ${INITIAL_STATE.default_format} • ${t("eloMeta")}: ${INITIAL_STATE.elo_min}-${INITIAL_STATE.elo_max} • ${t("matchesMeta")}: ${INITIAL_STATE.matches}`;
+}
+
+function hydratePokemonPreloadedRows() {
+  el("rows").querySelectorAll("img[data-srcs]").forEach(img => {
+    img.onerror = function() { nextSprite(this); };
+  });
+}
+
+function hydrateTeamPreloadedRows() {
+  el("team_rows").querySelectorAll("img[data-srcs]").forEach(img => {
+    img.onerror = function() { nextSprite(this); };
+  });
+}
+
+function renderAttackRows(items) {
+  const tbody = el("attack_rows");
+  tbody.innerHTML = "";
+
+  if (!items.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 5;
+    td.className = "muted";
+    td.textContent = t("noAttackData");
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  for (const a of items) {
+    const tr = document.createElement("tr");
+    const td0 = document.createElement("td"); td0.innerHTML = attackNameWithTypeHtml(a.localized_move_name || a.move_name || a.move_id || "-", a.move_type || "Unknown"); tr.appendChild(td0);
+    const td1 = document.createElement("td"); td1.textContent = fmtPct(a.winrate || 0); tr.appendChild(td1);
+    const td2 = document.createElement("td"); td2.textContent = `${a.games || 0}`; tr.appendChild(td2);
+    const td3 = document.createElement("td"); td3.textContent = `${a.uses || 0}`; tr.appendChild(td3);
+    const td4 = document.createElement("td"); td4.textContent = fmt1(a.avg_elo || 0); tr.appendChild(td4);
+    tbody.appendChild(tr);
+  }
+}
+
+function renderTeamRows(items, comboSizeFallback) {
+  const tbody = el("team_rows");
+  tbody.innerHTML = "";
+  const selectedMembers = new Set(selectedTeamMemberKeys());
+  const filteredItems = (Array.isArray(items) ? items : []).filter(item => {
+    if (!selectedMembers.size) return true;
+    const memberKeys = new Set((item.members || []).map(m => m.key));
+    for (const key of selectedMembers) {
+      if (!memberKeys.has(key)) return false;
+    }
+    return true;
+  });
+
+  if (!filteredItems.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 5;
+    td.className = "muted";
+    td.textContent = t("noTeamData");
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  for (const item of filteredItems) {
+    const tr = document.createElement("tr");
+    const td0 = document.createElement("td");
+    td0.innerHTML = teamMembersHtml(item.members, item.combo_size || comboSizeFallback, item.games || 0, item.wins || 0);
+    tr.appendChild(td0);
+    const td1 = document.createElement("td"); td1.innerHTML = pokemonStatCellHtml(t("winrate"), fmtPct(item.winrate || 0)); tr.appendChild(td1);
+    const td2 = document.createElement("td"); td2.innerHTML = pokemonStatCellHtml(t("games"), `${item.games || 0}`); tr.appendChild(td2);
+    const td3 = document.createElement("td"); td3.innerHTML = pokemonStatCellHtml(t("popularity"), fmtPct(item.popularity || 0)); tr.appendChild(td3);
+    const td4 = document.createElement("td"); td4.innerHTML = pokemonStatCellHtml(t("avgElo"), fmt1(item.avg_elo || 0)); tr.appendChild(td4);
+    tbody.appendChild(tr);
+  }
+  hydrateTeamPreloadedRows();
+}
+
+function useInitialPreloadedView(view) {
+  if (!matchesInitialWindow()) return false;
+  if ((el("q").value || "").trim()) return false;
+  if ((typeFilterState[view] || "").trim()) return false;
+  if (parseInt(el("limit").value || "0", 10) !== Number(INITIAL_STATE.limit || 200)) return false;
+
+  if (view === "pokemon") {
+    if (!usedInitialPokemon) return false;
+    if (parseInt(el("min_games").value || "0", 10) !== Number((INITIAL_STATE.pokemon || {}).min_games || 5000)) return false;
+    if (sortState.key !== (INITIAL_STATE.pokemon || {}).sort || sortState.order !== (INITIAL_STATE.pokemon || {}).order) return false;
+    setDefaultMeta();
+    hydratePokemonPreloadedRows();
+    return true;
+  }
+
+  if (view === "attacks") {
+    if (!usedInitialAttacks) return false;
+    if (parseInt(el("min_games").value || "0", 10) !== Number((INITIAL_STATE.attacks || {}).min_games || 5000)) return false;
+    if (attackSortState.key !== (INITIAL_STATE.attacks || {}).sort || attackSortState.order !== (INITIAL_STATE.attacks || {}).order) return false;
+    setDefaultMeta();
+    return true;
+  }
+
+  if (view === "teams") {
+    if (parseInt(el("min_games").value || "0", 10) !== Number((INITIAL_STATE.teams || {}).min_games || 50)) return false;
+    if (teamSortState.key !== (INITIAL_STATE.teams || {}).sort || teamSortState.order !== (INITIAL_STATE.teams || {}).order) return false;
+    const comboSize = String(parseInt(el("combo_size").value || "0", 10) || 6);
+    const preloadedBySize = (INITIAL_STATE.teams || {}).by_size || {};
+    if (!Array.isArray(preloadedBySize[comboSize])) return false;
+    setDefaultMeta();
+    renderTeamRows(preloadedBySize[comboSize], parseInt(comboSize, 10));
+    usedInitialTeams = true;
+    return true;
+  }
+
+  return false;
+}
+
+function hydrateInitialState() {
+  if (!INITIAL_STATE || !Array.isArray(INITIAL_STATE.formats)) return false;
+
+  const sel = el("formatid");
+  sel.innerHTML = "";
+  for (const f of INITIAL_STATE.formats) {
+    const opt = document.createElement("option");
+    opt.value = f;
+    opt.textContent = f;
+    sel.appendChild(opt);
+  }
+  sel.value = INITIAL_STATE.default_format || sel.value;
+
+  const smin = el("elo_min");
+  const smax = el("elo_max");
+  smin.min = INITIAL_STATE.elo_min;
+  smin.max = INITIAL_STATE.elo_max;
+  smin.step = INITIAL_STATE.elo_step;
+  smax.min = INITIAL_STATE.elo_min;
+  smax.max = INITIAL_STATE.elo_max;
+  smax.step = INITIAL_STATE.elo_step;
+  smin.value = INITIAL_STATE.elo_min;
+  smax.value = INITIAL_STATE.elo_max;
+  updateEloUI();
+
+  const cacheKey = `${INITIAL_STATE.default_format}|${INITIAL_STATE.elo_min}|${INITIAL_STATE.elo_max}`;
+  const cachedTypes = Array.isArray(INITIAL_STATE.types) ? INITIAL_STATE.types : [];
+  typeOptionsCache.pokemon = { key: cacheKey, types: cachedTypes };
+  typeOptionsCache.attacks = { key: cacheKey, types: cachedTypes };
+  typeOptionsCache.teams = { key: cacheKey, types: cachedTypes };
+  renderTypeButtons(cachedTypes);
+
+  setDefaultMeta();
+  hydratePokemonPreloadedRows();
+  hydrateTeamPreloadedRows();
+  usedInitialPokemon = true;
+  usedInitialAttacks = true;
+  usedInitialTeams = true;
+  return true;
 }
 
 function openModal(title, bodyHtml) {
@@ -776,6 +1226,7 @@ async function initTypeFilters() {
 async function loadAttacks() {
   const f = getFilters();
   updateAttackSortIndicators();
+  if (useInitialPreloadedView("attacks")) return;
 
   const params = new URLSearchParams({
     formatid: f.formatid,
@@ -792,31 +1243,56 @@ async function loadAttacks() {
 
   const res = await fetch("/api/attacks?" + params.toString());
   const data = await res.json();
-  const items = Array.isArray(data.items) ? data.items : [];
+  el("meta").textContent = `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${data.elo_min}-${data.elo_max} • ${t("matchesMeta")}: ${data.meta.matches}`;
+  renderAttackRows(Array.isArray(data.items) ? data.items : []);
+  usedInitialAttacks = false;
+}
 
-  const tbody = el("attack_rows");
-  tbody.innerHTML = "";
+function teamMembersHtml(members, comboSize, games, wins) {
+  const items = Array.isArray(members) ? members : [];
+  const sprites = items.map(m => {
+    const srcs = Array.isArray(m.sprite_urls) ? m.sprite_urls : [];
+    const firstSrc = srcs.length ? srcs[0] : "";
+    return `<img data-srcs='${JSON.stringify(srcs)}' src="${firstSrc}" alt="" loading="lazy" decoding="async" />`;
+  }).join("");
+  const names = items.map(m => escapeHtml(m.localized_name || m.name || m.key || "-")).join(" / ");
+  return `
+    <div class="teamComp">
+      <div class="teamSprites">${sprites}</div>
+      <div>
+        <div class="teamNames"><b>${names}</b></div>
+        <div class="muted">${comboSize} ${t("tabPokemon").toLowerCase()} • ${games} ${t("games").toLowerCase()} • ${wins} ${t("wins")}</div>
+      </div>
+    </div>`;
+}
 
-  if (!items.length) {
-    const tr = document.createElement("tr");
-    const td = document.createElement("td");
-    td.colSpan = 5;
-    td.className = "muted";
-    td.textContent = t("noAttackData");
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-    return;
-  }
+async function loadTeams() {
+  const f = getFilters();
+  updateTeamSortIndicators();
+  if (useInitialPreloadedView("teams")) return;
 
-  for (const a of items) {
-    const tr = document.createElement("tr");
-    const td0 = document.createElement("td"); td0.innerHTML = attackNameWithTypeHtml(a.localized_move_name || a.move_name || a.move_id || "-", a.move_type || "Unknown"); tr.appendChild(td0);
-    const td1 = document.createElement("td"); td1.textContent = fmtPct(a.winrate || 0); tr.appendChild(td1);
-    const td2 = document.createElement("td"); td2.textContent = `${a.games || 0}`; tr.appendChild(td2);
-    const td3 = document.createElement("td"); td3.textContent = `${a.uses || 0}`; tr.appendChild(td3);
-    const td4 = document.createElement("td"); td4.textContent = fmt1(a.avg_elo || 0); tr.appendChild(td4);
-    tbody.appendChild(tr);
-  }
+  const params = new URLSearchParams({
+    formatid: f.formatid,
+    q: f.q,
+    types: f.types_csv,
+    members: f.members_csv,
+    sort: f.team_sort,
+    order: f.team_order,
+    min_games: f.min_games.toString(),
+    limit: f.limit.toString(),
+    elo_min: f.elo_min.toString(),
+    elo_max: f.elo_max.toString(),
+    combo_size: f.combo_size.toString(),
+    lang: currentLang,
+  });
+
+  const res = await fetch("/api/teams?" + params.toString());
+  const data = await res.json();
+
+  el("meta").textContent =
+    `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${data.elo_min}-${data.elo_max} • ${t("matchesMeta")}: ${data.meta.matches}`;
+  renderTeamRows(Array.isArray(data.items) ? data.items : [], f.combo_size);
+  usedInitialTeams = false;
 }
 
 function typeIconsHtml(types) {
@@ -852,6 +1328,7 @@ async function loadList() {
   const f = getFilters();
   updateEloUI();
   updateSortIndicators();
+  if (useInitialPreloadedView("pokemon")) return;
 
   const fetchLimit = Math.max(2000, f.limit);
   const params = new URLSearchParams({
@@ -955,6 +1432,7 @@ async function loadList() {
 
     tbody.appendChild(tr);
   }
+  usedInitialPokemon = false;
 }
 
 function miniRowHtml(x) {
@@ -1146,6 +1624,54 @@ el("rows").addEventListener("click", (e) => {
   loadDetail(tr.dataset.key || "", tr.dataset.name || "");
 });
 
+el("team_member_slots").addEventListener("click", async (e) => {
+  e.stopPropagation();
+  const clearEl = e.target.closest("[data-clear-index]");
+  if (clearEl) {
+    const idx = parseInt(clearEl.dataset.clearIndex || "-1", 10);
+    if (idx >= 0) {
+      teamMemberFilters[idx] = "";
+      renderTeamMemberSlots();
+      closeTeamPicker();
+      applyTeamMemberFilters();
+    }
+    return;
+  }
+  const slot = e.target.closest(".teamMemberSlot[data-index]");
+  if (!slot) return;
+  const idx = parseInt(slot.dataset.index || "-1", 10);
+  if (idx >= 0) await openTeamPicker(idx);
+});
+
+el("team_picker_search").addEventListener("input", () => {
+  renderTeamPickerList();
+});
+
+el("team_picker_list").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const option = e.target.closest(".teamPickerOption[data-key]");
+  if (!option || activeTeamSlotIndex < 0) return;
+  teamMemberFilters[activeTeamSlotIndex] = option.dataset.key || "";
+  renderTeamMemberSlots();
+  closeTeamPicker();
+  applyTeamMemberFilters();
+});
+
+el("team_picker").addEventListener("click", (e) => {
+  e.stopPropagation();
+});
+
+el("team_picker_search").addEventListener("click", (e) => {
+  e.stopPropagation();
+});
+
+document.addEventListener("click", (e) => {
+  const picker = el("team_picker");
+  if (picker.classList.contains("isHidden")) return;
+  if (picker.contains(e.target) || el("team_member_slots").contains(e.target)) return;
+  closeTeamPicker();
+});
+
 el("lang_select").addEventListener("change", () => {
   currentLang = normLang(el("lang_select").value);
   localStorage.setItem("pkmeta_lang", currentLang);
@@ -1156,11 +1682,13 @@ el("formatid").addEventListener("change", async () => {
   saveSearchStateForView(activeView);
   typeOptionsCache.pokemon = { key: "", types: [] };
   typeOptionsCache.attacks = { key: "", types: [] };
+  typeOptionsCache.teams = { key: "", types: [] };
   hasPrewarmedDetail = false;
   await initEloBounds();
   await initTypeFilters();
-  await loadList();
-  await loadAttacks();
+  if (activeView === "pokemon") await loadList();
+  else if (activeView === "attacks") await loadAttacks();
+  else await loadTeams();
 });
 
 el("elo_min").addEventListener("input", () => {
@@ -1180,6 +1708,17 @@ el("tab_attacks").addEventListener("click", async () => {
   setView("attacks");
   await initTypeFilters();
   await loadAttacks();
+});
+el("tab_teams").addEventListener("click", async () => {
+  setView("teams");
+  await ensurePokemonPickerOptions();
+  renderTeamMemberSlots();
+  await initTypeFilters();
+  await loadTeams();
+});
+el("combo_size").addEventListener("change", () => {
+  if (viewSearchState.teams) viewSearchState.teams.combo_size = el("combo_size").value;
+  if (activeView === "teams") loadTeams();
 });
 
 function initSortHeaders(){
@@ -1205,21 +1744,34 @@ function initSortHeaders(){
     });
   });
 
+  document.querySelectorAll('#teamHead th[data-team-sort]').forEach(th => {
+    th.addEventListener("click", () => setTeamSort(th.dataset.teamSort));
+    th.tabIndex = 0;
+    th.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setTeamSort(th.dataset.teamSort);
+      }
+    });
+  });
+
   updateSortIndicators();
   updateAttackSortIndicators();
+  updateTeamSortIndicators();
 }
 
 (async () => {
   localStorage.setItem("pkmeta_lang", currentLang);
   el("lang_select").value = currentLang;
   applyI18n();
-  await initFormats();
-  await initEloBounds();
-  await initTypeFilters();
   initSortHeaders();
   setView("pokemon");
-  await loadList();
-  await loadAttacks();
+  if (!hydrateInitialState()) {
+    await initFormats();
+    await initEloBounds();
+    await initTypeFilters();
+    await loadList();
+  }
 })();
 </script>
 </body>

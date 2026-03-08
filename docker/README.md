@@ -9,6 +9,8 @@
 docker compose -f docker/debug/docker-compose.yml up -d --build
 ```
 
+The app mounts `stats.sqlite`, `attacks.sqlite`, and `teams.sqlite` into the container.
+
 ## Deploy
 
 ```bash

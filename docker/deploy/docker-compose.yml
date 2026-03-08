@@ -7,8 +7,12 @@ services:
       - "8000"
     environment:
       - PKMETA_DB=/app/stats.sqlite
+      - PKMETA_ATTACKS_DB=/app/attacks.sqlite
+      - PKMETA_TEAMS_DB=/app/teams.sqlite
     volumes:
       - ../../stats.sqlite:/app/stats.sqlite:ro
+      - ../../attacks.sqlite:/app/attacks.sqlite:ro
+      - ../../teams.sqlite:/app/teams.sqlite:ro
     restart: unless-stopped
 
   caddy:

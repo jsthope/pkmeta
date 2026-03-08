@@ -79,9 +79,13 @@ _POKEMON_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
 _MOVE_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
 _ITEM_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
 _ABILITY_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
+_POKEMON_PICKER_OPTION_CACHE: Dict[str, List[Dict[str, Any]]] = {}
 DEFAULT_HOME_FORMAT = "gen9ou"
 DEFAULT_HOME_MIN_GAMES = 5000
 DEFAULT_HOME_LIMIT = 200
+DEFAULT_HOME_ATTACK_MIN_GAMES = 5000
+DEFAULT_HOME_TEAM_MIN_GAMES = 50
+DEFAULT_HOME_TEAM_SIZE = 6
 DATASET_SOURCE_NAME = "metamon-raw-replays"
 DATASET_SOURCE_URL = "https://huggingface.co/datasets/jakegrigsby/metamon-raw-replays"
 
@@ -529,6 +533,36 @@ def _footer_copy_for_lang(lang: str) -> Dict[str, str]:
     return FOOTER_COPY.get(lang_norm, FOOTER_COPY["en"])
 
 
+def _pokemon_picker_options(lang: str) -> List[Dict[str, Any]]:
+    lang_norm = _normalize_lang(lang)
+    cached = _POKEMON_PICKER_OPTION_CACHE.get(lang_norm)
+    if cached is not None:
+        return cached
+
+    identity_map = load_pokedex_identity_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+    localized_name_map = load_pokemon_localized_name_map(lang_norm)
+    poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+    options: List[Dict[str, Any]] = []
+    for key, info in identity_map.items():
+        if not key:
+            continue
+        name = str(info.get("name") or key)
+        localized_name = localized_name_map.get(key, localized_name_map.get(_to_id(name), name))
+        options.append(
+            {
+                "key": key,
+                "name": name,
+                "localized_name": localized_name,
+                "types": poke_type_map.get(key, []),
+                "sprite_urls": sprite_urls(key, name),
+            }
+        )
+
+    options.sort(key=lambda x: (_to_id(x["localized_name"]), _to_id(x["name"])))
+    _POKEMON_PICKER_OPTION_CACHE[lang_norm] = options
+    return options
+
+
 def _available_formats(db_path: str) -> List[str]:
     conn = get_conn(db_path)
     try:
@@ -647,7 +681,185 @@ def _home_pokemon_rows(
     return {"matches": matches, "items": items}
 
 
-def _home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
+def _default_type_options(
+    db_path: str,
+    attacks_db_path: str,
+    formatid: str,
+    elo_min: int,
+    elo_max: int,
+) -> List[str]:
+    type_counts: Dict[str, int] = {}
+    poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+
+    conn = get_conn(db_path)
+    try:
+        rows = conn.execute(
+            """
+            SELECT key, SUM(games) AS games
+            FROM pokemon_bucket
+            WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
+            GROUP BY key
+            """,
+            (formatid, elo_min, elo_max),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    for r in rows:
+        games = int(r["games"])
+        types = poke_type_map.get(str(r["key"]), [])
+        for t in types:
+            type_counts[t] = type_counts.get(t, 0) + games
+
+    conn2 = get_conn(attacks_db_path)
+    try:
+        rows2 = conn2.execute(
+            """
+            SELECT move_type, SUM(games) AS games
+            FROM move_bucket
+            WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
+            GROUP BY move_type
+            """,
+            (formatid, elo_min, elo_max),
+        ).fetchall()
+        for r in rows2:
+            t = _normalize_type(str(r["move_type"]))
+            if not t:
+                continue
+            type_counts[t] = type_counts.get(t, 0) + int(r["games"])
+    except sqlite3.OperationalError:
+        pass
+    finally:
+        conn2.close()
+
+    types_sorted = sorted(
+        type_counts.items(),
+        key=lambda kv: (-kv[1], _TYPE_ORDER_INDEX.get(kv[0], 999), kv[0]),
+    )
+    return [t for t, _ in types_sorted]
+
+
+def _attack_items_payload(
+    attacks_db_path: str,
+    formatid: str,
+    q: str,
+    lang: str,
+    selected_types: Set[str],
+    sort: str,
+    order: str,
+    min_games: int,
+    limit: int,
+    elo_min: int,
+    elo_max: int,
+) -> Dict[str, Any]:
+    qraw = (q or "").strip().lower()
+    qid = _to_id(qraw)
+    lang_norm = _normalize_lang(lang)
+
+    conn = get_conn(attacks_db_path)
+    try:
+        matches_row = conn.execute(
+            "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
+            (formatid, elo_min, elo_max),
+        ).fetchone()
+
+        q_sql = """
+        SELECT
+          move_id,
+          MIN(move_name) AS move_name,
+          MIN(move_type) AS move_type,
+          SUM(games) AS games,
+          SUM(wins) AS wins,
+          SUM(uses) AS uses,
+          SUM(sum_elo) AS sum_elo
+        FROM move_bucket
+        WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
+        """
+        params: List[Any] = [formatid, elo_min, elo_max]
+        if selected_types:
+            qs = ",".join("?" for _ in selected_types)
+            q_sql += f" AND move_type IN ({qs})"
+            params.extend(sorted(selected_types))
+        q_sql += " GROUP BY move_id HAVING SUM(games) >= ?"
+        params.append(min_games)
+
+        rows = conn.execute(q_sql, params).fetchall()
+    except sqlite3.OperationalError:
+        conn.close()
+        return {
+            "formatid": formatid,
+            "elo_min": elo_min,
+            "elo_max": elo_max,
+            "items": [],
+            "meta": {"matches": 0},
+        }
+    finally:
+        conn.close()
+
+    move_localized_map = load_move_localized_name_map(lang_norm)
+    matches = int(matches_row["m"]) if matches_row else 0
+    items: List[Dict[str, Any]] = []
+    for r in rows:
+        games = int(r["games"])
+        wins = int(r["wins"])
+        uses = int(r["uses"])
+        sum_elo = int(r["sum_elo"])
+        move_name = str(r["move_name"])
+        move_id = str(r["move_id"])
+        localized_move_name = move_localized_map.get(_to_id(move_id), move_name)
+
+        if (
+            qraw
+            and qid
+            and qid not in _to_id(move_name)
+            and qid not in _to_id(move_id)
+            and qid not in _to_id(localized_move_name)
+            and qraw not in move_name.lower()
+            and qraw not in move_id.lower()
+            and qraw not in localized_move_name.lower()
+        ):
+            continue
+        if qraw and not qid and qraw not in move_name.lower() and qraw not in move_id.lower() and qraw not in localized_move_name.lower():
+            continue
+
+        items.append(
+            {
+                "move_id": move_id,
+                "move_name": move_name,
+                "localized_move_name": localized_move_name,
+                "move_type": str(r["move_type"]),
+                "games": games,
+                "wins": wins,
+                "uses": uses,
+                "winrate": (wins / games) if games else 0.0,
+                "avg_elo": (sum_elo / games) if games else 0.0,
+            }
+        )
+
+    reverse = (order != "asc")
+    if sort == "uses":
+        items.sort(key=lambda x: x["uses"], reverse=reverse)
+    elif sort == "games":
+        items.sort(key=lambda x: x["games"], reverse=reverse)
+    elif sort == "avg_elo":
+        items.sort(key=lambda x: x["avg_elo"], reverse=reverse)
+    elif sort == "type":
+        items.sort(key=lambda x: x["move_type"].lower(), reverse=reverse)
+    elif sort == "move":
+        items.sort(key=lambda x: x["move_name"].lower(), reverse=reverse)
+    else:
+        items.sort(key=lambda x: x["winrate"], reverse=reverse)
+
+    return {
+        "formatid": formatid,
+        "elo_min": elo_min,
+        "elo_max": elo_max,
+        "items": items[:limit],
+        "meta": {"matches": matches},
+    }
+
+
+def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, lang: str) -> Dict[str, Any]:
     formats = _available_formats(db_path)
     formatid = _default_home_format(formats)
     elo_bounds = _elo_bounds_for_format(db_path, formatid)
@@ -658,6 +870,44 @@ def _home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
         lang=lang,
         min_games=DEFAULT_HOME_MIN_GAMES,
         limit=DEFAULT_HOME_LIMIT,
+        elo_min=elo_bounds["min"],
+        elo_max=elo_bounds["max"],
+    )
+    attacks = _attack_items_payload(
+        attacks_db_path=attacks_db_path,
+        formatid=formatid,
+        q="",
+        lang=lang,
+        selected_types=set(),
+        sort="winrate",
+        order="desc",
+        min_games=DEFAULT_HOME_ATTACK_MIN_GAMES,
+        limit=DEFAULT_HOME_LIMIT,
+        elo_min=elo_bounds["min"],
+        elo_max=elo_bounds["max"],
+    )
+    team_rows_by_size: Dict[str, List[Dict[str, Any]]] = {}
+    for combo_size in (6, 5, 4, 3, 2):
+        payload = _team_items_payload(
+            teams_db_path=teams_db_path,
+            formatid=formatid,
+            lang=lang,
+        q="",
+        selected_types=set(),
+        required_member_keys=[],
+        sort="popularity",
+        order="desc",
+            min_games=DEFAULT_HOME_TEAM_MIN_GAMES,
+            limit=DEFAULT_HOME_LIMIT,
+            elo_min=elo_bounds["min"],
+            elo_max=elo_bounds["max"],
+            combo_size=combo_size,
+        )
+        team_rows_by_size[str(combo_size)] = payload["items"]
+    initial_types = _default_type_options(
+        db_path=db_path,
+        attacks_db_path=attacks_db_path,
+        formatid=formatid,
         elo_min=elo_bounds["min"],
         elo_max=elo_bounds["max"],
     )
@@ -672,9 +922,341 @@ def _home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
         "min_games": DEFAULT_HOME_MIN_GAMES,
         "min_games_display": _human_int(DEFAULT_HOME_MIN_GAMES),
         "rows": pokemon["items"],
+        "attack_rows": attacks["items"],
+        "team_rows": team_rows_by_size[str(DEFAULT_HOME_TEAM_SIZE)],
         "source_name": DATASET_SOURCE_NAME,
         "source_url": DATASET_SOURCE_URL,
         "footer": footer_copy,
+        "initial_state": {
+            "formats": formats,
+            "default_format": formatid,
+            "elo_min": elo_bounds["min"],
+            "elo_max": elo_bounds["max"],
+            "elo_step": elo_bounds["step"],
+            "types": initial_types,
+            "matches": pokemon["matches"],
+            "pokemon": {"min_games": DEFAULT_HOME_MIN_GAMES, "sort": "popularity", "order": "desc", "preloaded": True},
+            "attacks": {"min_games": DEFAULT_HOME_ATTACK_MIN_GAMES, "sort": "winrate", "order": "desc", "preloaded": True},
+            "teams": {
+                "min_games": DEFAULT_HOME_TEAM_MIN_GAMES,
+                "sort": "popularity",
+                "order": "desc",
+                "combo_size": DEFAULT_HOME_TEAM_SIZE,
+                "preloaded": True,
+                "by_size": team_rows_by_size,
+            },
+            "pokemon_picker_options": _pokemon_picker_options(lang),
+            "limit": DEFAULT_HOME_LIMIT,
+        },
+    }
+
+
+def _ensure_team_cache_schema(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS combo_query_cache (
+          formatid TEXT NOT NULL,
+          elo_min INTEGER NOT NULL,
+          elo_max INTEGER NOT NULL,
+          combo_size INTEGER NOT NULL,
+          combo_key TEXT NOT NULL,
+          combo_names TEXT NOT NULL,
+          combo_types TEXT NOT NULL,
+          games INTEGER NOT NULL,
+          wins INTEGER NOT NULL,
+          sum_elo INTEGER NOT NULL,
+          PRIMARY KEY (formatid, elo_min, elo_max, combo_size, combo_key)
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS combo_query_cache_meta (
+          formatid TEXT NOT NULL,
+          elo_min INTEGER NOT NULL,
+          elo_max INTEGER NOT NULL,
+          combo_size INTEGER NOT NULL,
+          matches INTEGER NOT NULL,
+          cached_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (formatid, elo_min, elo_max, combo_size)
+        ) WITHOUT ROWID;
+
+        CREATE INDEX IF NOT EXISTS idx_combo_query_cache_window_games
+          ON combo_query_cache(formatid, elo_min, elo_max, combo_size, games);
+
+        CREATE INDEX IF NOT EXISTS idx_combo_query_cache_window_names
+          ON combo_query_cache(formatid, elo_min, elo_max, combo_size, combo_names);
+        """
+    )
+    conn.commit()
+
+
+def _combo_cache_metadata(
+    combo_key: str,
+    identity_map: Dict[str, Dict[str, Any]],
+    poke_type_map: Dict[str, List[str]],
+) -> Dict[str, str]:
+    member_keys = [k for k in combo_key.split("|") if k]
+    names: List[str] = []
+    types: Set[str] = set()
+    for key in member_keys:
+        info = identity_map.get(key, {})
+        name = str(info.get("name") or key)
+        names.append(name.lower())
+        types.update(poke_type_map.get(key, []))
+    return {
+        "combo_names": " | ".join(names),
+        "combo_types": "|" + "|".join(sorted(types)) + "|" if types else "",
+    }
+
+
+def _populate_team_query_cache(
+    conn: sqlite3.Connection,
+    formatid: str,
+    combo_size: int,
+    elo_min: int,
+    elo_max: int,
+) -> int:
+    meta_row = conn.execute(
+        """
+        SELECT matches
+        FROM combo_query_cache_meta
+        WHERE formatid=? AND elo_min=? AND elo_max=? AND combo_size=?
+        """,
+        (formatid, elo_min, elo_max, combo_size),
+    ).fetchone()
+    if meta_row is not None:
+        return int(meta_row["matches"])
+
+    matches_row = conn.execute(
+        "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
+        (formatid, elo_min, elo_max),
+    ).fetchone()
+    matches = int(matches_row["m"]) if matches_row else 0
+
+    rows = conn.execute(
+        """
+        SELECT combo_key, SUM(games) AS games, SUM(wins) AS wins, SUM(sum_elo) AS sum_elo
+        FROM combo_bucket
+        WHERE formatid=? AND combo_size=? AND elo_bucket BETWEEN ? AND ?
+        GROUP BY combo_key
+        """,
+        (formatid, combo_size, elo_min, elo_max),
+    ).fetchall()
+
+    identity_map = load_pokedex_identity_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+    poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+
+    conn.execute("BEGIN")
+    conn.execute(
+        "DELETE FROM combo_query_cache WHERE formatid=? AND elo_min=? AND elo_max=? AND combo_size=?",
+        (formatid, elo_min, elo_max, combo_size),
+    )
+    if rows:
+        conn.executemany(
+            """
+            INSERT INTO combo_query_cache(
+              formatid, elo_min, elo_max, combo_size, combo_key, combo_names, combo_types, games, wins, sum_elo
+            )
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+            """,
+            [
+                (
+                    formatid,
+                    elo_min,
+                    elo_max,
+                    combo_size,
+                    combo_key,
+                    meta["combo_names"],
+                    meta["combo_types"],
+                    int(r["games"]),
+                    int(r["wins"]),
+                    int(r["sum_elo"]),
+                )
+                for r in rows
+                for combo_key in [str(r["combo_key"])]
+                for meta in [_combo_cache_metadata(combo_key, identity_map, poke_type_map)]
+            ],
+        )
+    conn.execute(
+        """
+        INSERT INTO combo_query_cache_meta(formatid, elo_min, elo_max, combo_size, matches, cached_at)
+        VALUES (?,?,?,?,?,CURRENT_TIMESTAMP)
+        ON CONFLICT(formatid, elo_min, elo_max, combo_size) DO UPDATE SET
+          matches=excluded.matches,
+          cached_at=CURRENT_TIMESTAMP
+        """,
+        (formatid, elo_min, elo_max, combo_size, matches),
+    )
+    conn.execute("COMMIT")
+    return matches
+
+
+def _team_items_payload(
+    teams_db_path: str,
+    formatid: str,
+    lang: str,
+    q: str,
+    selected_types: Set[str],
+    required_member_keys: List[str],
+    sort: str,
+    order: str,
+    min_games: int,
+    limit: int,
+    elo_min: int,
+    elo_max: int,
+    combo_size: int,
+) -> Dict[str, Any]:
+    if not os.path.exists(teams_db_path):
+        return {
+            "formatid": formatid,
+            "elo_min": elo_min,
+            "elo_max": elo_max,
+            "combo_size": combo_size,
+            "items": [],
+            "meta": {"matches": 0},
+        }
+
+    qraw = (q or "").strip().lower()
+    qid = _to_id(qraw)
+    lang_norm = _normalize_lang(lang)
+    required_member_keys = sorted({_to_id(x) for x in required_member_keys if _to_id(x)})
+    localized_name_map = load_pokemon_localized_name_map(lang_norm)
+    identity_map = load_pokedex_identity_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+    poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+
+    conn = get_conn(teams_db_path)
+    try:
+        _ensure_team_cache_schema(conn)
+        matches = _populate_team_query_cache(conn, formatid, combo_size, elo_min, elo_max)
+
+        query_sql = """
+        SELECT combo_key, combo_names, combo_types, games, wins, sum_elo
+        FROM combo_query_cache
+        WHERE formatid=? AND elo_min=? AND elo_max=? AND combo_size=? AND games >= ?
+        """
+        params: List[Any] = [formatid, elo_min, elo_max, combo_size, min_games]
+
+        selected_type = next(iter(selected_types), "") if selected_types else ""
+        if selected_type:
+            query_sql += " AND combo_types LIKE ?"
+            params.append(f"%|{selected_type}|%")
+
+        for member_key in required_member_keys:
+            query_sql += " AND ('|' || combo_key || '|') LIKE ?"
+            params.append(f"%|{member_key}|%")
+
+        localized_search_required = bool(qraw and lang_norm != "en")
+        if qid and not localized_search_required:
+            query_sql += " AND combo_key LIKE ?"
+            params.append(f"%{qid}%")
+        elif qraw and not localized_search_required:
+            query_sql += " AND combo_names LIKE ?"
+            params.append(f"%{qraw}%")
+
+        fast_path = not qraw and not selected_type and sort in {"popularity", "games", "winrate", "avg_elo"}
+        if fast_path:
+            if sort in {"popularity", "games"}:
+                order_sql = "games"
+            elif sort == "avg_elo":
+                order_sql = "CASE WHEN games > 0 THEN (1.0 * sum_elo / games) ELSE 0 END"
+            else:
+                order_sql = "CASE WHEN games > 0 THEN (1.0 * wins / games) ELSE 0 END"
+            direction = "ASC" if order == "asc" else "DESC"
+            query_sql += f" ORDER BY {order_sql} {direction}, combo_key ASC LIMIT ?"
+            params.append(limit)
+
+        rows = conn.execute(query_sql, params).fetchall()
+    except sqlite3.OperationalError:
+        conn.close()
+        return {
+            "formatid": formatid,
+            "elo_min": elo_min,
+            "elo_max": elo_max,
+            "combo_size": combo_size,
+            "items": [],
+            "meta": {"matches": 0},
+        }
+    finally:
+        conn.close()
+
+    denom = max(1, 2 * matches)
+
+    items: List[Dict[str, Any]] = []
+    for r in rows:
+        combo_key = str(r["combo_key"])
+        member_keys = [k for k in combo_key.split("|") if k]
+        if required_member_keys and not all(member in member_keys for member in required_member_keys):
+            continue
+        members: List[Dict[str, Any]] = []
+        searchable_parts: List[str] = []
+        member_types: Set[str] = set()
+
+        for key in member_keys:
+            info = identity_map.get(key, {})
+            name = str(info.get("name") or key)
+            localized_name = localized_name_map.get(key, localized_name_map.get(_to_id(name), name))
+            types = poke_type_map.get(key, [])
+            member_types.update(types)
+            searchable_parts.extend([key.lower(), name.lower(), localized_name.lower()])
+            members.append(
+                {
+                    "key": key,
+                    "name": name,
+                    "localized_name": localized_name,
+                    "types": types,
+                    "sprite_urls": sprite_urls(key, name),
+                }
+            )
+
+        if selected_types and not selected_types.intersection(member_types):
+            continue
+
+        if qraw:
+            haystack = " ".join(searchable_parts)
+            if qid:
+                if qid not in _to_id(haystack):
+                    continue
+            elif qraw not in haystack:
+                continue
+
+        games = int(r["games"])
+        wins = int(r["wins"])
+        sum_elo = int(r["sum_elo"])
+        localized_label = " / ".join(m["localized_name"] for m in members)
+        raw_label = " / ".join(m["name"] for m in members)
+
+        items.append(
+            {
+                "combo_key": combo_key,
+                "combo_size": combo_size,
+                "games": games,
+                "wins": wins,
+                "winrate": (wins / games) if games else 0.0,
+                "avg_elo": (sum_elo / games) if games else 0.0,
+                "popularity": games / denom,
+                "members": members,
+                "label": localized_label,
+                "raw_label": raw_label,
+            }
+        )
+
+    reverse = (order != "asc")
+    if not fast_path:
+        if sort == "games":
+            items.sort(key=lambda x: x["games"], reverse=reverse)
+        elif sort == "avg_elo":
+            items.sort(key=lambda x: x["avg_elo"], reverse=reverse)
+        elif sort == "name":
+            items.sort(key=lambda x: x["raw_label"].lower(), reverse=reverse)
+        else:
+            key_name = "popularity" if sort == "popularity" else "winrate"
+            items.sort(key=lambda x: x[key_name], reverse=reverse)
+
+    return {
+        "formatid": formatid,
+        "elo_min": elo_min,
+        "elo_max": elo_max,
+        "combo_size": combo_size,
+        "items": items[:limit] if not fast_path else items,
+        "meta": {"matches": matches},
     }
 
 
@@ -893,6 +1475,7 @@ def load_ability_localized_name_map(lang: str = "en") -> Dict[str, str]:
 def make_app(
     db_path: str,
     attacks_db_path: str = "attacks.sqlite",
+    teams_db_path: str = "teams.sqlite",
     min_pair_games_default: int = 3000,
     min_vs_games_default: int = 3000,
 ) -> Flask:
@@ -926,7 +1509,7 @@ def make_app(
         if lang_from_query in SUPPORTED_LANGS and lang_from_query != "en":
             return redirect(f"/{lang_from_query}", code=302)
         seo = _seo_context_for_lang("en")
-        home = _home_page_context(db_path, seo["lang"])
+        home = _home_page_context(db_path, attacks_db_path, teams_db_path, seo["lang"])
         return render_template("index.html", seo=seo, server_lang=seo["lang"], home=home, ui_i18n=UI_I18N)
 
     @app.get("/<lang_code>")
@@ -944,7 +1527,7 @@ def make_app(
         if lang_norm == "en":
             return redirect("/", code=301)
         seo = _seo_context_for_lang(lang_norm)
-        home = _home_page_context(db_path, seo["lang"])
+        home = _home_page_context(db_path, attacks_db_path, teams_db_path, seo["lang"])
         return render_template("index.html", seo=seo, server_lang=seo["lang"], home=home, ui_i18n=UI_I18N)
 
     @app.get("/robots.txt")
@@ -1214,6 +1797,11 @@ def make_app(
                 "meta": {"matches": matches, "total_games_sum": total_games_sum},
             }
         )
+
+    @app.get("/api/pokemon_options")
+    def api_pokemon_options():
+        lang = _normalize_lang(request.args.get("lang", "en") or "en")
+        return jsonify({"items": _pokemon_picker_options(lang)})
 
     @app.get("/api/pokemon/<key>/detail")
     def api_pokemon_detail(key: str):
@@ -1648,6 +2236,41 @@ def make_app(
             }
         )
 
+    @app.get("/api/teams")
+    def api_teams():
+        formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        lang = _normalize_lang(request.args.get("lang", "en") or "en")
+        q = (request.args.get("q", "") or "").strip()
+        selected_types = _parse_types_param(request.args.get("types", "") or "")
+        sort = (request.args.get("sort", "popularity") or "popularity").strip().lower()
+        order = (request.args.get("order", "desc") or "desc").strip().lower()
+        min_games = clamp_int(request.args.get("min_games", 50), 0, 10_000_000)
+        limit = clamp_int(request.args.get("limit", 200), 10, 2000)
+        combo_size = clamp_int(request.args.get("combo_size", 6), 2, 6)
+
+        elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
+        elo_max = clamp_int(request.args.get("elo_max", 10000), 0, 10000)
+        if elo_min > elo_max:
+            elo_min, elo_max = elo_max, elo_min
+
+        return jsonify(
+            _team_items_payload(
+                teams_db_path=teams_db_path,
+                formatid=formatid,
+                lang=lang,
+                q=q,
+                selected_types=selected_types,
+                required_member_keys=[x for x in (request.args.get("members", "") or "").split(",") if x.strip()],
+                sort=sort,
+                order=order,
+                min_games=min_games,
+                limit=limit,
+                elo_min=elo_min,
+                elo_max=elo_max,
+                combo_size=combo_size,
+            )
+        )
+
     return app
 
 
@@ -1655,11 +2278,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default="stats.sqlite")
     ap.add_argument("--attacks_db", default="attacks.sqlite")
+    ap.add_argument("--teams_db", default="teams.sqlite")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     args = ap.parse_args()
 
-    app = make_app(args.db, attacks_db_path=args.attacks_db)
+    app = make_app(args.db, attacks_db_path=args.attacks_db, teams_db_path=args.teams_db)
     app.run(host=args.host, port=args.port, debug=False)
 
 

@@ -23,12 +23,13 @@ Generate the SQLite database from parquet files:
 ```bash
 python3 tools/build_stats.py --data_dir data --out stats.sqlite
 python3 tools/build_attack_stats.py --data_dir data --out attacks.sqlite
+python3 tools/build_team_stats.py --data_dir data --out teams.sqlite
 ```
 
 ## Run the app
 
 ```bash
-python3 app.py --db stats.sqlite --attacks_db attacks.sqlite --host 127.0.0.1 --port 8000
+python3 app.py --db stats.sqlite --attacks_db attacks.sqlite --teams_db teams.sqlite --host 127.0.0.1 --port 8000
 ```
 
 Then open `http://127.0.0.1:8000`.

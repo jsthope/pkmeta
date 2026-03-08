@@ -514,6 +514,142 @@ input:focus, select:focus{
 .tabPanel.isActive{ display: block; }
 .isHidden{ display: none !important; }
 
+.teamControls{
+  margin-top: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.teamControls label{
+  width: fit-content;
+}
+
+.teamFilterGroup{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.teamFilterGroup > span{
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.teamMemberSlots{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.teamMemberSlot{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+  max-width: 180px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: #2f2f2f;
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.teamMemberSlot:hover{
+  background: #353535;
+}
+
+.teamMemberSlot img{
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  image-rendering: pixelated;
+  background: rgba(0,0,0,.18);
+  flex: 0 0 auto;
+}
+
+.teamMemberSlot span{
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teamMemberPlus{
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.teamMemberClear{
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.teamPicker{
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 170px;
+  z-index: 4;
+  width: min(420px, 100%);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: #252525;
+  box-shadow: var(--shadow2);
+  overflow: hidden;
+}
+
+.teamPickerSearchWrap{
+  padding: 10px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.teamPickerSearch{
+  width: 100%;
+}
+
+.teamPickerList{
+  max-height: 320px;
+  overflow: auto;
+}
+
+.teamPickerOption{
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.teamPickerOption:hover{
+  background: #323232;
+}
+
+.teamPickerOption img{
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  image-rendering: pixelated;
+  background: rgba(0,0,0,.18);
+  flex: 0 0 auto;
+}
+
+.teamPickerEmpty{
+  padding: 12px;
+  color: var(--muted);
+}
+
 table{
   width: 100%;
   border-collapse: collapse;
@@ -536,12 +672,16 @@ tbody td{
   vertical-align: middle;
 }
 
-thead th[data-sort]{
+thead th[data-sort],
+thead th[data-attack-sort],
+thead th[data-team-sort]{
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
 }
-thead th[data-sort]:hover{
+thead th[data-sort]:hover,
+thead th[data-attack-sort]:hover,
+thead th[data-team-sort]:hover{
   background: #333333;
 }
 .sortInd{
@@ -579,6 +719,34 @@ tbody tr.clickable:hover{ background: #303030; }
   letter-spacing: .1px;
 }
 
+.teamComp{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 280px;
+}
+
+.teamSprites{
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.teamSprites img{
+  width: 34px;
+  height: 34px;
+  image-rendering: pixelated;
+  border-radius: 6px;
+  background: rgba(0,0,0,.15);
+  border: 1px solid rgba(255,255,255,.10);
+}
+
+.teamNames b{
+  font-size: 14px;
+  line-height: 1.35;
+}
+
 .mobileStatLabel{
   display: none;
 }
@@ -591,6 +759,9 @@ tbody tr.clickable:hover{ background: #303030; }
 @media (max-width: 720px){
   :root{ --spriteTable: 48px; }
   .poke{ min-width: unset; }
+  .teamControls{ flex-direction: column; }
+  .teamPicker{ position: static; width: 100%; }
+  .teamMemberSlot{ min-width: calc(50% - 4px); max-width: none; }
 }
 
 .btn{
@@ -961,11 +1132,24 @@ html.modal-open body{ overflow: hidden; }
     min-width: 0;
   }
 
+  #panel_teams table{
+    min-width: 0;
+  }
+
   #panel_pokemon thead{
     display: none;
   }
 
+  #panel_teams thead{
+    display: none;
+  }
+
   #panel_pokemon tbody{
+    display: grid;
+    gap: 10px;
+  }
+
+  #panel_teams tbody{
     display: grid;
     gap: 10px;
   }
@@ -981,7 +1165,23 @@ html.modal-open body{ overflow: hidden; }
     box-shadow: var(--shadow);
   }
 
+  #panel_teams tbody tr{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px;
+    border-radius: var(--r20);
+    border: 1px solid var(--stroke);
+    background: #262626;
+    box-shadow: var(--shadow);
+  }
+
   #panel_pokemon tbody td{
+    padding: 0;
+    border: 0;
+  }
+
+  #panel_teams tbody td{
     padding: 0;
     border: 0;
   }
@@ -991,7 +1191,23 @@ html.modal-open body{ overflow: hidden; }
     padding-bottom: 4px;
   }
 
+  #panel_teams tbody td:first-child{
+    grid-column: 1 / -1;
+    padding-bottom: 4px;
+  }
+
   #panel_pokemon .mobileStat{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 6px;
+    background: #2f2f2f;
+  }
+
+  #panel_teams .mobileStat{
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1009,7 +1225,21 @@ html.modal-open body{ overflow: hidden; }
     line-height: 1.15;
   }
 
+  #panel_teams .mobileStatLabel{
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.15;
+  }
+
   #panel_pokemon .mobileStatValue{
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text);
+    text-align: right;
+  }
+
+  #panel_teams .mobileStatValue{
     font-size: 13px;
     font-weight: 800;
     color: var(--text);
@@ -1018,6 +1248,20 @@ html.modal-open body{ overflow: hidden; }
 
   .poke{
     gap: 10px;
+  }
+
+  .teamComp{
+    min-width: unset;
+    align-items: flex-start;
+  }
+
+  .teamSprites{
+    grid-template-columns: repeat(3, 30px);
+  }
+
+  .teamSprites img{
+    width: 30px;
+    height: 30px;
   }
 
   .poke b{

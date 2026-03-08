@@ -1,3 +1,5 @@
 metamon-raw-replays/
 stats.sqlite
+teams.sqlite
+attacks.sqlite
 __pycache__/
