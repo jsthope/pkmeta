@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Set
 from urllib.request import Request, urlopen
 
 from flask import Flask, Response, jsonify, redirect, render_template, request
+from translations import FOOTER_COPY, LANG_TO_OG_LOCALE, SEO_COPY, SUPPORTED_LANGS, UI_I18N
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 SPRITE_HOME = "https://play.pokemonshowdown.com/sprites/home/"
@@ -78,60 +79,11 @@ _POKEMON_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
 _MOVE_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
 _ITEM_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
 _ABILITY_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
-
-SUPPORTED_LANGS: tuple[str, ...] = ("en", "fr", "de", "es", "it", "ja", "ko", "zh-hans")
-LANG_TO_OG_LOCALE: Dict[str, str] = {
-    "en": "en_US",
-    "fr": "fr_FR",
-    "de": "de_DE",
-    "es": "es_ES",
-    "it": "it_IT",
-    "ja": "ja_JP",
-    "ko": "ko_KR",
-    "zh-hans": "zh_CN",
-}
-SEO_COPY: Dict[str, Dict[str, str]] = {
-    "en": {
-        "title": "pkmeta.net - Pokemon Meta, VGC/PvP Stats & Win Rate",
-        "description": "pkmeta.net: competitive Pokemon stats for meta analysis, win rate, usage, synergies, counters, and Elo filters.",
-        "keywords": "pkmeta, pokemon, pokemon meta, meta pokemon, pokemon strategy, best pokemon, pvp, vgc, winrate, pokemon stats",
-    },
-    "fr": {
-        "title": "pkmeta.net - Meta Pokemon, Stats VGC/PvP et Taux de Victoire",
-        "description": "pkmeta.net: statistiques Pokemon competitives pour analyser la meta, le taux de victoire, l'usage, les synergies, les contres et l'Elo.",
-        "keywords": "pkmeta, pokemon, meta pokemon, strategie pokemon, pvp, vgc, taux de victoire, statistiques pokemon",
-    },
-    "de": {
-        "title": "pkmeta.net - Pokemon-Meta, VGC/PvP-Stats und Winrate",
-        "description": "pkmeta.net: kompetitive Pokemon-Statistiken fur Meta-Analyse, Winrate, Usage, Synergien, Counter und Elo-Filter.",
-        "keywords": "pkmeta, pokemon, pokemon meta, pokemon strategie, pvp, vgc, winrate, pokemon stats",
-    },
-    "es": {
-        "title": "pkmeta.net - Meta Pokemon, Estadisticas VGC/PvP y Winrate",
-        "description": "pkmeta.net: estadisticas competitivas de Pokemon para analizar la meta, winrate, uso, sinergias, counters y filtros Elo.",
-        "keywords": "pkmeta, pokemon, meta pokemon, estrategia pokemon, pvp, vgc, winrate, estadisticas pokemon",
-    },
-    "it": {
-        "title": "pkmeta.net - Meta Pokemon, Statistiche VGC/PvP e Winrate",
-        "description": "pkmeta.net: statistiche competitive Pokemon per analisi meta, winrate, uso, sinergie, counter e filtri Elo.",
-        "keywords": "pkmeta, pokemon, meta pokemon, strategia pokemon, pvp, vgc, winrate, statistiche pokemon",
-    },
-    "ja": {
-        "title": "pkmeta.net - Pokemon Meta, VGC/PvP Stats and Win Rate",
-        "description": "pkmeta.net: Pokemonの対戦統計。メタ分析、勝率、使用率、相性、対策、Eloフィルターを確認できます。",
-        "keywords": "pkmeta, pokemon, meta, pvp, vgc, winrate, usage, stats",
-    },
-    "ko": {
-        "title": "pkmeta.net - Pokemon Meta, VGC/PvP Stats and Win Rate",
-        "description": "pkmeta.net: 포켓몬 대전 통계. 메타 분석, 승률, 사용률, 시너지, 카운터, Elo 필터를 제공합니다.",
-        "keywords": "pkmeta, pokemon, meta, pvp, vgc, winrate, usage, stats",
-    },
-    "zh-hans": {
-        "title": "pkmeta.net - Pokemon Meta, VGC/PvP Stats and Win Rate",
-        "description": "pkmeta.net: 宝可梦对战数据平台，提供环境分析、胜率、使用率、联防与克制以及 Elo 筛选。",
-        "keywords": "pkmeta, pokemon, meta, pvp, vgc, winrate, usage, stats",
-    },
-}
+DEFAULT_HOME_FORMAT = "gen9ou"
+DEFAULT_HOME_MIN_GAMES = 5000
+DEFAULT_HOME_LIMIT = 200
+DATASET_SOURCE_NAME = "metamon-raw-replays"
+DATASET_SOURCE_URL = "https://huggingface.co/datasets/jakegrigsby/metamon-raw-replays"
 
 
 # Sprite URL helpers
@@ -568,6 +520,164 @@ def _seo_context_for_lang(lang: str) -> Dict[str, Any]:
     }
 
 
+def _human_int(x: int) -> str:
+    return f"{int(x):,}"
+
+
+def _footer_copy_for_lang(lang: str) -> Dict[str, str]:
+    lang_norm = _normalize_lang(lang)
+    return FOOTER_COPY.get(lang_norm, FOOTER_COPY["en"])
+
+
+def _available_formats(db_path: str) -> List[str]:
+    conn = get_conn(db_path)
+    try:
+        rows = conn.execute("SELECT DISTINCT formatid FROM matches_bucket ORDER BY formatid").fetchall()
+    finally:
+        conn.close()
+    return [str(r["formatid"]) for r in rows if r["formatid"] is not None]
+
+
+def _default_home_format(formats: List[str]) -> str:
+    if DEFAULT_HOME_FORMAT in formats:
+        return DEFAULT_HOME_FORMAT
+    if "all" in formats:
+        return "all"
+    return formats[0] if formats else "all"
+
+
+def _elo_bounds_for_format(db_path: str, formatid: str) -> Dict[str, int]:
+    conn = get_conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT MIN(elo_bucket) AS mn, MAX(elo_bucket) AS mx FROM matches_bucket WHERE formatid=?",
+            (formatid,),
+        ).fetchone()
+    finally:
+        conn.close()
+    return {
+        "min": int(row["mn"] if row and row["mn"] is not None else 0),
+        "max": int(row["mx"] if row and row["mx"] is not None else 2000),
+        "step": 100,
+    }
+
+
+def _home_pokemon_rows(
+    db_path: str,
+    formatid: str,
+    lang: str,
+    min_games: int,
+    limit: int,
+    elo_min: int,
+    elo_max: int,
+) -> Dict[str, Any]:
+    conn = get_conn(db_path)
+    try:
+        matches_row = conn.execute(
+            "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
+            (formatid, elo_min, elo_max),
+        ).fetchone()
+        rows = conn.execute(
+            """
+            SELECT
+              key,
+              MIN(name) AS name,
+              SUM(games) AS games,
+              SUM(wins) AS wins,
+              SUM(sum_elo) AS sum_elo,
+              SUM(used) AS used,
+              SUM(leads) AS leads,
+              SUM(kills) AS kills,
+              SUM(deaths) AS deaths,
+              SUM(dmg_dealt) AS dmg_dealt,
+              SUM(dmg_taken) AS dmg_taken
+            FROM pokemon_bucket
+            WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
+            GROUP BY key
+            HAVING SUM(games) >= ?
+            ORDER BY SUM(games) DESC
+            LIMIT ?
+            """,
+            (formatid, elo_min, elo_max, min_games, limit),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    matches = int(matches_row["m"]) if matches_row else 0
+    denom = max(1, 2 * matches)
+    poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+    localized_name_map = load_pokemon_localized_name_map(lang)
+
+    items: List[Dict[str, Any]] = []
+    for r in rows:
+        games = int(r["games"])
+        wins = int(r["wins"])
+        used = int(r["used"])
+        leads = int(r["leads"])
+        sum_elo = int(r["sum_elo"])
+        kills = int(r["kills"])
+        deaths = int(r["deaths"])
+        key = str(r["key"])
+        name = str(r["name"])
+        localized_name = localized_name_map.get(key, localized_name_map.get(_to_id(name), name))
+
+        dmg_dealt = int(r["dmg_dealt"]) / 100.0
+        dmg_taken = int(r["dmg_taken"]) / 100.0
+        items.append(
+            {
+                "key": key,
+                "name": name,
+                "localized_name": localized_name,
+                "games": games,
+                "wins": wins,
+                "winrate": (wins / games) if games else 0.0,
+                "popularity": games / denom,
+                "avg_elo": (sum_elo / games) if games else 0.0,
+                "lead_rate": (leads / used) if used else 0.0,
+                "kd": kills / max(1, deaths),
+                "dmg_dealt": dmg_dealt,
+                "dmg_taken": dmg_taken,
+                "dmg_dealt_avg": (dmg_dealt / games) if games else 0.0,
+                "dmg_taken_avg": (dmg_taken / games) if games else 0.0,
+                "types": poke_type_map.get(key, []),
+                "sprite_urls": sprite_urls(key, name),
+            }
+        )
+
+    return {"matches": matches, "items": items}
+
+
+def _home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
+    formats = _available_formats(db_path)
+    formatid = _default_home_format(formats)
+    elo_bounds = _elo_bounds_for_format(db_path, formatid)
+    footer_copy = _footer_copy_for_lang(lang)
+    pokemon = _home_pokemon_rows(
+        db_path=db_path,
+        formatid=formatid,
+        lang=lang,
+        min_games=DEFAULT_HOME_MIN_GAMES,
+        limit=DEFAULT_HOME_LIMIT,
+        elo_min=elo_bounds["min"],
+        elo_max=elo_bounds["max"],
+    )
+    return {
+        "formats": formats,
+        "formatid": formatid,
+        "elo_min": elo_bounds["min"],
+        "elo_max": elo_bounds["max"],
+        "elo_step": elo_bounds["step"],
+        "matches": pokemon["matches"],
+        "matches_display": _human_int(pokemon["matches"]),
+        "min_games": DEFAULT_HOME_MIN_GAMES,
+        "min_games_display": _human_int(DEFAULT_HOME_MIN_GAMES),
+        "rows": pokemon["items"],
+        "source_name": DATASET_SOURCE_NAME,
+        "source_url": DATASET_SOURCE_URL,
+        "footer": footer_copy,
+    }
+
+
 def _load_species_name_by_id(lang: str) -> Dict[int, str]:
     rows = _read_csv_rows(POKEMON_SPECIES_NAMES_CSV_URLS)
     out: Dict[int, str] = {}
@@ -816,7 +926,8 @@ def make_app(
         if lang_from_query in SUPPORTED_LANGS and lang_from_query != "en":
             return redirect(f"/{lang_from_query}", code=302)
         seo = _seo_context_for_lang("en")
-        return render_template("index.html", seo=seo, server_lang=seo["lang"])
+        home = _home_page_context(db_path, seo["lang"])
+        return render_template("index.html", seo=seo, server_lang=seo["lang"], home=home, ui_i18n=UI_I18N)
 
     @app.get("/<lang_code>")
     def index_lang(lang_code: str) -> Any:
@@ -833,7 +944,8 @@ def make_app(
         if lang_norm == "en":
             return redirect("/", code=301)
         seo = _seo_context_for_lang(lang_norm)
-        return render_template("index.html", seo=seo, server_lang=seo["lang"])
+        home = _home_page_context(db_path, seo["lang"])
+        return render_template("index.html", seo=seo, server_lang=seo["lang"], home=home, ui_i18n=UI_I18N)
 
     @app.get("/robots.txt")
     def robots_txt() -> Response:

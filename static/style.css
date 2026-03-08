@@ -73,6 +73,66 @@ a{ color: inherit; }
   padding: 0 18px;
 }
 
+.seoFooter{
+  margin-top: 14px;
+}
+
+.seoCard + .seoCard,
+.seoCard + .summaryGrid,
+.summaryGrid + .seoCard{
+  margin-top: 14px;
+}
+
+.eyebrow{
+  margin: 0 0 8px;
+  color: var(--muted2);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.seoCard h2{
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.lede{
+  margin: 10px 0 0;
+  color: var(--muted);
+  max-width: 78ch;
+  line-height: 1.5;
+}
+
+.summaryGrid{
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.summaryCard{
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 8px;
+  background: #2d2d2d;
+  padding: 12px;
+}
+
+.summaryLabel{
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.summaryValue{
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
 .top{
   display:flex;
   align-items:flex-end;
@@ -159,16 +219,18 @@ a{ color: inherit; }
 
 .bar{
   display:grid;
-  grid-template-columns: repeat(6, minmax(140px, 1fr));
+  grid-template-columns: minmax(150px, 1fr) minmax(220px, 1.45fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(160px, 1fr) minmax(160px, 1fr);
   gap: 12px;
   padding: 14px;
   border-radius: var(--r20);
   background: var(--card);
   border: 1px solid var(--stroke);
   box-shadow: var(--shadow);
+  align-items: end;
 }
 
 @media (max-width: 1100px){
+  .summaryGrid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .bar{ grid-template-columns: repeat(3, minmax(160px, 1fr)); }
 }
 @media (max-width: 720px){
@@ -207,8 +269,14 @@ input:focus, select:focus{
   box-shadow: 0 0 0 3px rgba(255,255,255,.10);
 }
 
-.rangeBlock{ grid-column: span 2; }
-@media (max-width: 1100px){ .rangeBlock{ grid-column: span 3; } }
+.rangeBlock{
+  grid-column: 5 / 7;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+@media (max-width: 1100px){ .rangeBlock{ grid-column: 1 / -1; } }
 @media (max-width: 720px){ .rangeBlock{ grid-column: span 1; } }
 
 .rangeWrap{
@@ -231,6 +299,19 @@ input:focus, select:focus{
   border-radius: 4px;
   background: #3f3f3f;
   pointer-events: none;
+  overflow: hidden;
+}
+
+.rangeTrack::after{
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--pmin);
+  width: calc(var(--pmax) - var(--pmin));
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8f8f8f 0%, #c4c4c4 100%);
 }
 
 .rangeWrap input[type="range"]{
@@ -247,6 +328,11 @@ input:focus, select:focus{
   outline: 0;
   -webkit-appearance: none;
   appearance: none;
+  box-shadow: none;
+}
+.rangeWrap input[type="range"]:focus,
+.rangeWrap input[type="range"]:focus-visible{
+  box-shadow: none;
 }
 .rangeWrap input[type="range"]::-webkit-slider-runnable-track{
   height: 6px;
@@ -258,10 +344,10 @@ input:focus, select:focus{
   pointer-events: auto;
   height: 18px;
   width: 18px;
-  border-radius: 4px;
-  background: #d8d8d8;
-  border: 1px solid rgba(0,0,0,.25);
-  box-shadow: 0 6px 16px rgba(0,0,0,.30);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fafafa 0%, #d7d7d7 100%);
+  border: 1px solid rgba(20,20,20,.5);
+  box-shadow: 0 2px 10px rgba(0,0,0,.35);
   margin-top: -6px;
 }
 .rangeWrap input[type="range"]::-moz-range-track{
@@ -272,13 +358,16 @@ input:focus, select:focus{
   pointer-events: auto;
   height: 18px;
   width: 18px;
-  border-radius: 4px;
-  background: #d8d8d8;
-  border: 1px solid rgba(0,0,0,.25);
-  box-shadow: 0 6px 16px rgba(0,0,0,.30);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fafafa 0%, #d7d7d7 100%);
+  border: 1px solid rgba(20,20,20,.5);
+  box-shadow: 0 2px 10px rgba(0,0,0,.35);
 }
 .rangeWrap input[type="range"]:focus-visible::-webkit-slider-thumb{
-  box-shadow: 0 0 0 3px rgba(255,255,255,.16), 0 6px 16px rgba(0,0,0,.30);
+  box-shadow: 0 0 0 3px rgba(255,255,255,.14), 0 2px 10px rgba(0,0,0,.35);
+}
+.rangeWrap input[type="range"]:focus-visible::-moz-range-thumb{
+  box-shadow: 0 0 0 3px rgba(255,255,255,.14), 0 2px 10px rgba(0,0,0,.35);
 }
 
 .tableWrap{
@@ -787,6 +876,9 @@ img[src$=".gif"]{ filter: none !important; }
 html.modal-open body{ overflow: hidden; }
 
 @media (max-width: 720px){
+  .seoCard h2{ font-size: 20px; }
+  .summaryGrid{ grid-template-columns: 1fr; }
+
   .page{
     margin: 18px auto 32px;
     padding: 0 12px;

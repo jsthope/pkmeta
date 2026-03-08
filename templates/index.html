@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ seo.lang }}">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -31,7 +31,7 @@
   </script>
 </head>
 <body>
-  <div class="page">
+  <main class="page">
     <header class="top">
       <h1><img class="brandMark" src="/static/pkmeta-mark.svg" alt=""/>Pkmeta <span>- Pokemon Stats from Showdown</span></h1>
       <div class="topRight">
@@ -53,13 +53,17 @@
           </svg>
           <span>GitHub</span>
         </a>
-        <div class="muted" id="meta">Loading…</div>
+        <div class="muted" id="meta">Format: {{ home.formatid }} • Elo: {{ home.elo_min }}-{{ home.elo_max }} • Matches: {{ home.matches_display }}</div>
       </div>
     </header>
 
     <div class="bar">
       <label><span id="lbl_format">Format</span>
-        <select id="formatid"></select>
+        <select id="formatid">
+          {% for format in home.formats %}
+          <option value="{{ format }}"{% if format == home.formatid %} selected{% endif %}>{{ format }}</option>
+          {% endfor %}
+        </select>
       </label>
 
       <label><span id="lbl_search">Search</span>
@@ -67,7 +71,7 @@
       </label>
 
       <label><span id="lbl_min_games">Min games</span>
-        <input id="min_games" type="number" value="5000" min="0" step="10"/>
+        <input id="min_games" type="number" value="{{ home.min_games }}" min="0" step="10"/>
       </label>
 
       <label><span id="lbl_limit">Max results</span>
@@ -75,11 +79,11 @@
       </label>
 
       <div class="rangeBlock">
-        <div class="muted"><span id="lbl_elo_range">Elo range</span>: <span id="elo_label">…</span></div>
+        <div class="muted"><span id="lbl_elo_range">Elo range</span>: <span id="elo_label">{{ home.elo_min }} - {{ home.elo_max }}</span></div>
         <div class="rangeWrap" id="elo_wrap">
           <div class="rangeTrack" id="elo_track"></div>
-          <input id="elo_min" type="range" min="0" max="2000" step="100" value="0" />
-          <input id="elo_max" type="range" min="0" max="2000" step="100" value="2000" />
+          <input id="elo_min" type="range" min="{{ home.elo_min }}" max="{{ home.elo_max }}" step="{{ home.elo_step }}" value="{{ home.elo_min }}" />
+          <input id="elo_max" type="range" min="{{ home.elo_min }}" max="{{ home.elo_max }}" step="{{ home.elo_step }}" value="{{ home.elo_max }}" />
         </div>
       </div>
     </div>
@@ -108,7 +112,37 @@
               <th data-sort="avg_elo">Avg ELO <span class="sortInd"></span></th>
             </tr>
           </thead>
-          <tbody id="rows"></tbody>
+          <tbody id="rows">
+            {% for r in home.rows %}
+            <tr class="clickable" data-key="{{ r.key }}" data-name="{{ r.localized_name or r.name }}">
+              <td>
+                <div class="poke">
+                  <img data-srcs='{{ r.sprite_urls | tojson }}' src="{{ r.sprite_urls[0] if r.sprite_urls else '' }}" alt="" loading="lazy" decoding="async" />
+                  <div>
+                    <div class="pokeNameLine"><b>{{ r.localized_name or r.name }}</b>
+                      {% if r.types %}
+                      <div class="typeIcons">
+                        {% for type_name in r.types %}
+                        <img src="https://cdn.jsdelivr.net/gh/partywhale/pokemon-type-icons@main/icons/{{ type_name|lower }}.svg" alt="{{ type_name }}" title="{{ type_name }}"/>
+                        {% endfor %}
+                      </div>
+                      {% endif %}
+                    </div>
+                    <div class="muted">{{ r.games }} games • {{ r.wins }} wins</div>
+                  </div>
+                </div>
+              </td>
+              <td><div class="mobileStat"><span class="mobileStatLabel">Winrate</span><b class="mobileStatValue">{{ '%.1f'|format(r.winrate * 100) }}%</b></div></td>
+              <td><div class="mobileStat"><span class="mobileStatLabel">Games</span><b class="mobileStatValue">{{ r.games }}</b></div></td>
+              <td><div class="mobileStat"><span class="mobileStatLabel">Popularity</span><b class="mobileStatValue">{{ '%.1f'|format(r.popularity * 100) }}%</b></div></td>
+              <td><div class="mobileStat"><span class="mobileStatLabel">Lead rate</span><b class="mobileStatValue">{{ '%.1f'|format(r.lead_rate * 100) }}%</b></div></td>
+              <td><div class="mobileStat"><span class="mobileStatLabel">K/D</span><b class="mobileStatValue">{{ '%.1f'|format(r.kd) }}</b></div></td>
+              <td><div class="mobileStat"><span class="mobileStatLabel">Dmg dealt %</span><b class="mobileStatValue">{{ '%.1f'|format(r.dmg_dealt_avg) }}</b></div></td>
+              <td><div class="mobileStat"><span class="mobileStatLabel">Dmg taken %</span><b class="mobileStatValue">{{ '%.1f'|format(r.dmg_taken_avg) }}</b></div></td>
+              <td><div class="mobileStat"><span class="mobileStatLabel">Avg ELO</span><b class="mobileStatValue">{{ '%.1f'|format(r.avg_elo) }}</b></div></td>
+            </tr>
+            {% endfor %}
+          </tbody>
         </table>
       </div>
     </div>
@@ -129,7 +163,54 @@
         </table>
       </div>
     </div>
-  </div>
+
+    <section class="seoFooter" aria-labelledby="seo_footer_title">
+      <div class="card seoCard">
+        <p class="eyebrow">{{ home.footer.eyebrow }}</p>
+        <h2 id="seo_footer_title">{{ seo.title }}</h2>
+        <p class="lede">{{ seo.description }}</p>
+      </div>
+
+      <div class="card seoCard">
+        <h2>{{ home.footer.analysis_title }}</h2>
+        <p class="lede">{{ home.footer.analysis_p1 }}</p>
+        <p class="lede">{{ home.footer.analysis_p2 }}</p>
+      </div>
+
+      <div class="card seoCard">
+        <h2>{{ home.footer.build_title }}</h2>
+        <p class="lede">{{ home.footer.build_p1 }}</p>
+        <p class="lede">{{ home.footer.build_p2 }}</p>
+      </div>
+
+      <div class="card seoCard">
+        <h2>{{ home.footer.usage_title }}</h2>
+        <p class="lede">{{ home.footer.usage_p1 }}</p>
+        <p class="lede">{{ home.footer.usage_p2 }}</p>
+      </div>
+
+      <div class="card seoCard">
+        <h2>{{ home.footer.elo_title }}</h2>
+        <p class="lede">{{ home.footer.elo_p1 }}</p>
+        <p class="lede">{{ home.footer.elo_p2 }}</p>
+      </div>
+
+      <div class="card seoCard">
+        <h2>{{ home.footer.data_source_title }}</h2>
+        <p class="lede"><a href="{{ home.source_url }}" target="_blank" rel="noopener noreferrer">{{ home.source_name }}</a></p>
+      </div>
+
+      <div class="card seoCard">
+        <h2>{{ home.footer.how_title }}</h2>
+        <p class="lede">{{ home.footer.how_p1 }}</p>
+      </div>
+
+      <div class="card seoCard">
+        <h2>{{ home.footer.champions_title }}</h2>
+        <p class="lede">{{ home.footer.champions_p1 }}</p>
+      </div>
+    </section>
+  </main>
 
   <div id="modalBack" class="modalBack" role="dialog" aria-modal="true">
     <div class="modal" role="document">
@@ -152,346 +233,9 @@ const BULBA_FILEPATH_BASE = "https://archives.bulbagarden.net/wiki/Special:FileP
 const ANI_BASE = "https://play.pokemonshowdown.com/sprites/ani/";
 const TYPE_ICON_BASE = "https://cdn.jsdelivr.net/gh/partywhale/pokemon-type-icons@main/icons/";
 
-const I18N = {
-  en: {
-    langLabel: "Language",
-    format: "Format",
-    search: "Search",
-    searchPh: "ex: Gholdengo, Dragapult...",
-    minGames: "Min games",
-    maxResults: "Max results",
-    eloRange: "Elo range",
-    tabPokemon: "Pokemon",
-    tabAttacks: "Attacks",
-    all: "All",
-    allTypes: "All types",
-    noAttackData: "No attack data found.",
-    details: "Details",
-    closeEsc: "Close (Esc)",
-    loading: "Loading...",
-    loadingDots: "Loading...",
-    formatMeta: "Format",
-    eloMeta: "Elo",
-    matchesMeta: "Matches",
-    games: "Games",
-    wins: "wins",
-    synergies: "Synergies & matchups",
-    topMates: "Top mates",
-    topCounters: "Top counters",
-    popularity: "Usage",
-    leadRate: "Lead rate",
-    winrate: "Winrate",
-    avgElo: "Avg ELO",
-    uses: "Uses",
-    dmgDealt: "Dmg dealt %",
-    dmgTaken: "Dmg taken %",
-    lead: "Lead",
-    attack: "Attack",
-    score: "score",
-    moves: "Moves",
-    items: "Items",
-    noAbilityData: "No ability data",
-    error: "Error",
-    httpError: "HTTP error",
-    rowWinrate: "winrate",
-  },
-  fr: {
-    langLabel: "Langue",
-    format: "Format",
-    search: "Recherche",
-    searchPh: "ex : Dracaufeu, Lanssorien...",
-    minGames: "Parties min",
-    maxResults: "Résultats max",
-    eloRange: "Plage Elo",
-    tabPokemon: "Pokémon",
-    tabAttacks: "Attaques",
-    all: "Tous",
-    allTypes: "Tous les types",
-    noAttackData: "Aucune donnée d'attaque.",
-    details: "Détails",
-    closeEsc: "Fermer (Esc)",
-    loading: "Chargement...",
-    loadingDots: "Chargement...",
-    formatMeta: "Format",
-    eloMeta: "Elo",
-    matchesMeta: "Matchs",
-    games: "Parties",
-    wins: "victoires",
-    synergies: "Synergies et matchups",
-    topMates: "Meilleurs partenaires",
-    topCounters: "Top contres",
-    popularity: "Usage",
-    leadRate: "Taux lead",
-    winrate: "Taux victoire",
-    avgElo: "Elo moyen",
-    uses: "Utilisations",
-    dmgDealt: "Dégâts infligés %",
-    dmgTaken: "Dégâts reçus %",
-    lead: "Lead",
-    attack: "Attaque",
-    score: "score",
-    moves: "Capacités",
-    items: "Objets",
-    noAbilityData: "Aucune donnée de talent",
-    error: "Erreur",
-    httpError: "Erreur HTTP",
-    rowWinrate: "taux de victoire",
-  },
-  de: {
-    langLabel: "Sprache",
-    format: "Format",
-    search: "Suche",
-    searchPh: "z. B.: Gholdengo, Dragapult...",
-    minGames: "Min. Spiele",
-    maxResults: "Max. Ergebnisse",
-    eloRange: "Elo-Bereich",
-    tabPokemon: "Pokemon",
-    tabAttacks: "Attacken",
-    all: "Alle",
-    allTypes: "Alle Typen",
-    noAttackData: "Keine Angriffsdaten gefunden.",
-    details: "Details",
-    closeEsc: "Schliessen (Esc)",
-    loading: "Laden...",
-    loadingDots: "Laden...",
-    formatMeta: "Format",
-    eloMeta: "Elo",
-    matchesMeta: "Kaempfe",
-    games: "Spiele",
-    wins: "Siege",
-    synergies: "Synergien und Matchups",
-    topMates: "Top-Partner",
-    topCounters: "Top-Counter",
-    popularity: "Usage",
-    leadRate: "Lead-Rate",
-    winrate: "Winrate",
-    avgElo: "Durchschn. Elo",
-    uses: "Nutzungen",
-    dmgDealt: "Verursachter Schaden %",
-    dmgTaken: "Erlittener Schaden %",
-    lead: "Lead",
-    attack: "Attacke",
-    score: "Score",
-    moves: "Moves",
-    items: "Items",
-    noAbilityData: "Keine Faehigkeitsdaten",
-    error: "Fehler",
-    httpError: "HTTP-Fehler",
-    rowWinrate: "Winrate",
-  },
-  es: {
-    langLabel: "Idioma",
-    format: "Formato",
-    search: "Buscar",
-    searchPh: "ej.: Gholdengo, Dragapult...",
-    minGames: "Partidas min.",
-    maxResults: "Resultados max.",
-    eloRange: "Rango Elo",
-    tabPokemon: "Pokemon",
-    tabAttacks: "Ataques",
-    all: "Todos",
-    allTypes: "Todos los tipos",
-    noAttackData: "No se encontraron datos de ataques.",
-    details: "Detalles",
-    closeEsc: "Cerrar (Esc)",
-    loading: "Cargando...",
-    loadingDots: "Cargando...",
-    formatMeta: "Formato",
-    eloMeta: "Elo",
-    matchesMeta: "Combates",
-    games: "Partidas",
-    wins: "victorias",
-    synergies: "Sinergias y enfrentamientos",
-    topMates: "Mejores partners",
-    topCounters: "Top counters",
-    popularity: "Uso",
-    leadRate: "Tasa lead",
-    winrate: "Winrate",
-    avgElo: "Elo medio",
-    uses: "Usos",
-    dmgDealt: "Dano infligido %",
-    dmgTaken: "Dano recibido %",
-    lead: "Lead",
-    attack: "Ataque",
-    score: "Puntuacion",
-    moves: "Movimientos",
-    items: "Objetos",
-    noAbilityData: "Sin datos de habilidad",
-    error: "Error",
-    httpError: "Error HTTP",
-    rowWinrate: "winrate",
-  },
-  it: {
-    langLabel: "Lingua",
-    format: "Formato",
-    search: "Cerca",
-    searchPh: "es.: Gholdengo, Dragapult...",
-    minGames: "Partite min.",
-    maxResults: "Risultati max",
-    eloRange: "Intervallo Elo",
-    tabPokemon: "Pokemon",
-    tabAttacks: "Attacchi",
-    all: "Tutti",
-    allTypes: "Tutti i tipi",
-    noAttackData: "Nessun dato sugli attacchi.",
-    details: "Dettagli",
-    closeEsc: "Chiudi (Esc)",
-    loading: "Caricamento...",
-    loadingDots: "Caricamento...",
-    formatMeta: "Formato",
-    eloMeta: "Elo",
-    matchesMeta: "Incontri",
-    games: "Partite",
-    wins: "vittorie",
-    synergies: "Sinergie e matchup",
-    topMates: "Migliori partner",
-    topCounters: "Top counter",
-    popularity: "Uso",
-    leadRate: "Tasso lead",
-    winrate: "Winrate",
-    avgElo: "Elo medio",
-    uses: "Utilizzi",
-    dmgDealt: "Danno inflitto %",
-    dmgTaken: "Danno subito %",
-    lead: "Lead",
-    attack: "Attacco",
-    score: "Punteggio",
-    moves: "Mosse",
-    items: "Strumenti",
-    noAbilityData: "Nessun dato abilita",
-    error: "Errore",
-    httpError: "Errore HTTP",
-    rowWinrate: "winrate",
-  },
-  ja: {
-    langLabel: "言語",
-    format: "フォーマット",
-    search: "検索",
-    searchPh: "例: サーフゴー、ドラパルト...",
-    minGames: "最小対戦数",
-    maxResults: "最大件数",
-    eloRange: "Elo範囲",
-    tabPokemon: "ポケモン",
-    tabAttacks: "わざ",
-    all: "すべて",
-    allTypes: "全タイプ",
-    noAttackData: "わざデータがありません。",
-    details: "詳細",
-    closeEsc: "閉じる (Esc)",
-    loading: "読み込み中...",
-    loadingDots: "読み込み中...",
-    formatMeta: "フォーマット",
-    eloMeta: "Elo",
-    matchesMeta: "試合数",
-    games: "試合",
-    wins: "勝",
-    synergies: "相性とシナジー",
-    topMates: "相性の良い味方",
-    topCounters: "有利な相手",
-    popularity: "使用率",
-    leadRate: "先発率",
-    winrate: "勝率",
-    avgElo: "平均Elo",
-    uses: "採用数",
-    dmgDealt: "与ダメージ %",
-    dmgTaken: "被ダメージ %",
-    lead: "先発",
-    attack: "わざ",
-    score: "スコア",
-    moves: "わざ",
-    items: "持ち物",
-    noAbilityData: "とくせいデータなし",
-    error: "エラー",
-    httpError: "HTTPエラー",
-    rowWinrate: "勝率",
-  },
-  ko: {
-    langLabel: "언어",
-    format: "포맷",
-    search: "검색",
-    searchPh: "예: 타부자고, 드래펄트...",
-    minGames: "최소 경기",
-    maxResults: "최대 결과",
-    eloRange: "Elo 범위",
-    tabPokemon: "포켓몬",
-    tabAttacks: "기술",
-    all: "전체",
-    allTypes: "모든 타입",
-    noAttackData: "기술 데이터가 없습니다.",
-    details: "상세",
-    closeEsc: "닫기 (Esc)",
-    loading: "로딩 중...",
-    loadingDots: "로딩 중...",
-    formatMeta: "포맷",
-    eloMeta: "Elo",
-    matchesMeta: "매치",
-    games: "경기",
-    wins: "승",
-    synergies: "시너지 및 상성",
-    topMates: "좋은 파트너",
-    topCounters: "강한 카운터",
-    popularity: "사용률",
-    leadRate: "선봉 비율",
-    winrate: "승률",
-    avgElo: "평균 Elo",
-    uses: "사용 수",
-    dmgDealt: "가한 피해 %",
-    dmgTaken: "받은 피해 %",
-    lead: "선봉",
-    attack: "기술",
-    score: "점수",
-    moves: "기술",
-    items: "아이템",
-    noAbilityData: "특성 데이터 없음",
-    error: "오류",
-    httpError: "HTTP 오류",
-    rowWinrate: "승률",
-  },
-  "zh-hans": {
-    langLabel: "语言",
-    format: "分级",
-    search: "搜索",
-    searchPh: "例如: 赛富豪、多龙巴鲁托...",
-    minGames: "最少对战",
-    maxResults: "最大结果",
-    eloRange: "Elo 范围",
-    tabPokemon: "宝可梦",
-    tabAttacks: "招式",
-    all: "全部",
-    allTypes: "全部属性",
-    noAttackData: "未找到招式数据。",
-    details: "详情",
-    closeEsc: "关闭 (Esc)",
-    loading: "加载中...",
-    loadingDots: "加载中...",
-    formatMeta: "分级",
-    eloMeta: "Elo",
-    matchesMeta: "对战",
-    games: "场",
-    wins: "胜",
-    synergies: "联防与对位",
-    topMates: "最佳队友",
-    topCounters: "最佳克制",
-    popularity: "使用率",
-    leadRate: "首发率",
-    winrate: "胜率",
-    avgElo: "平均 Elo",
-    uses: "使用次数",
-    dmgDealt: "造成伤害 %",
-    dmgTaken: "承受伤害 %",
-    lead: "首发",
-    attack: "招式",
-    score: "分数",
-    moves: "招式",
-    items: "道具",
-    noAbilityData: "无特性数据",
-    error: "错误",
-    httpError: "HTTP 错误",
-    rowWinrate: "胜率",
-  },
-};
+const I18N = {{ ui_i18n | tojson }};
 
-const SUPPORTED_LANGS = new Set(["en", "fr", "de", "es", "it", "ja", "ko", "zh-hans"]);
+const SUPPORTED_LANGS = new Set(Object.keys(I18N));
 
 function normLang(x) {
   const raw = String(x || "").toLowerCase();
@@ -922,6 +666,7 @@ function getFilters() {
 function updateEloUI(changed) {
   const smin = el("elo_min");
   const smax = el("elo_max");
+  const wrap = el("elo_wrap");
 
   let mn = parseInt(smin.value || "0", 10);
   let mx = parseInt(smax.value || "0", 10);
@@ -942,8 +687,8 @@ function updateEloUI(changed) {
   const pmin = ((mn - minBound) / span) * 100;
   const pmax = ((mx - minBound) / span) * 100;
 
-  document.documentElement.style.setProperty("--pmin", pmin.toFixed(2) + "%");
-  document.documentElement.style.setProperty("--pmax", pmax.toFixed(2) + "%");
+  wrap.style.setProperty("--pmin", pmin.toFixed(2) + "%");
+  wrap.style.setProperty("--pmax", pmax.toFixed(2) + "%");
 
   if (changed === "min") { smin.style.zIndex = "5"; smax.style.zIndex = "4"; }
   else if (changed === "max") { smax.style.zIndex = "5"; smin.style.zIndex = "4"; }
@@ -1180,7 +925,8 @@ async function loadList() {
   for (const r of items) {
     const tr = document.createElement("tr");
     tr.className = "clickable";
-    tr.addEventListener("click", () => loadDetail(r.key, r.localized_name || r.name));
+    tr.dataset.key = r.key || "";
+    tr.dataset.name = r.localized_name || r.name || "";
 
     const td0 = document.createElement("td");
     const srcs = Array.isArray(r.sprite_urls) ? r.sprite_urls : [];
@@ -1393,6 +1139,12 @@ async function loadDetail(key, nameHint) {
 
 el("q").addEventListener("input", debouncedLoadActive);
 ["min_games","limit"].forEach(id => el(id).addEventListener("input", debouncedLoadActive));
+
+el("rows").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-key]");
+  if (!tr || !el("rows").contains(tr)) return;
+  loadDetail(tr.dataset.key || "", tr.dataset.name || "");
+});
 
 el("lang_select").addEventListener("change", () => {
   currentLang = normLang(el("lang_select").value);
