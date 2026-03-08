@@ -84,7 +84,7 @@ DEFAULT_HOME_FORMAT = "gen9ou"
 DEFAULT_HOME_MIN_GAMES = 5000
 DEFAULT_HOME_LIMIT = 200
 DEFAULT_HOME_ATTACK_MIN_GAMES = 5000
-DEFAULT_HOME_TEAM_MIN_GAMES = 50
+DEFAULT_HOME_TEAM_MIN_GAMES = 500
 DEFAULT_HOME_TEAM_SIZE = 6
 DATASET_SOURCE_NAME = "metamon-raw-replays"
 DATASET_SOURCE_URL = "https://huggingface.co/datasets/jakegrigsby/metamon-raw-replays"
@@ -2244,7 +2244,7 @@ def make_app(
         selected_types = _parse_types_param(request.args.get("types", "") or "")
         sort = (request.args.get("sort", "popularity") or "popularity").strip().lower()
         order = (request.args.get("order", "desc") or "desc").strip().lower()
-        min_games = clamp_int(request.args.get("min_games", 50), 0, 10_000_000)
+        min_games = clamp_int(request.args.get("min_games", 500), 0, 10_000_000)
         limit = clamp_int(request.args.get("limit", 200), 10, 2000)
         combo_size = clamp_int(request.args.get("combo_size", 6), 2, 6)
 

@@ -133,14 +133,14 @@
                   </div>
                 </div>
               </td>
-              <td><div class="mobileStat"><span class="mobileStatLabel">Winrate</span><b class="mobileStatValue">{{ '%.1f'|format(r.winrate * 100) }}%</b></div></td>
-              <td><div class="mobileStat"><span class="mobileStatLabel">Games</span><b class="mobileStatValue">{{ r.games }}</b></div></td>
-              <td><div class="mobileStat"><span class="mobileStatLabel">Popularity</span><b class="mobileStatValue">{{ '%.1f'|format(r.popularity * 100) }}%</b></div></td>
-              <td><div class="mobileStat"><span class="mobileStatLabel">Lead rate</span><b class="mobileStatValue">{{ '%.1f'|format(r.lead_rate * 100) }}%</b></div></td>
-              <td><div class="mobileStat"><span class="mobileStatLabel">K/D</span><b class="mobileStatValue">{{ '%.1f'|format(r.kd) }}</b></div></td>
-              <td><div class="mobileStat"><span class="mobileStatLabel">Dmg dealt %</span><b class="mobileStatValue">{{ '%.1f'|format(r.dmg_dealt_avg) }}</b></div></td>
-              <td><div class="mobileStat"><span class="mobileStatLabel">Dmg taken %</span><b class="mobileStatValue">{{ '%.1f'|format(r.dmg_taken_avg) }}</b></div></td>
-              <td><div class="mobileStat"><span class="mobileStatLabel">Avg ELO</span><b class="mobileStatValue">{{ '%.1f'|format(r.avg_elo) }}</b></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="winrate" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Winrate</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.winrate * 100) }}%</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="games" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Games</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ r.games }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="popularity" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Popularity</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.popularity * 100) }}%</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="lead_rate" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Lead rate</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.lead_rate * 100) }}%</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="kd" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">K/D</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.kd) }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="dmg_dealt" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Dmg dealt %</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.dmg_dealt_avg) }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="dmg_taken" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Dmg taken %</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.dmg_taken_avg) }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.avg_elo) }}</b></span></div></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -233,10 +233,10 @@
                   </div>
                 </div>
               </td>
-              <td><div class="mobileStat"><span class="mobileStatLabel">Winrate</span><b class="mobileStatValue">{{ '%.1f'|format(item.winrate * 100) }}%</b></div></td>
-              <td><div class="mobileStat"><span class="mobileStatLabel">Games</span><b class="mobileStatValue">{{ item.games }}</b></div></td>
-              <td><div class="mobileStat"><span class="mobileStatLabel">Popularity</span><b class="mobileStatValue">{{ '%.1f'|format(item.popularity * 100) }}%</b></div></td>
-              <td><div class="mobileStat"><span class="mobileStatLabel">Avg ELO</span><b class="mobileStatValue">{{ '%.1f'|format(item.avg_elo) }}</b></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="winrate" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Winrate</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(item.winrate * 100) }}%</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="games" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Games</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ item.games }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="popularity" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Popularity</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(item.popularity * 100) }}%</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(item.avg_elo) }}</b></span></div></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -462,7 +462,7 @@ function preferAniFirst(spriteUrls) {
 const viewSearchState = {
   pokemon: { q: "", min_games: String((INITIAL_STATE.pokemon || {}).min_games || 5000), limit: String(INITIAL_STATE.limit || 200) },
   attacks: { q: "", min_games: String((INITIAL_STATE.attacks || {}).min_games || 5000), limit: String(INITIAL_STATE.limit || 200) },
-  teams: { q: "", min_games: String((INITIAL_STATE.teams || {}).min_games || 50), limit: String(INITIAL_STATE.limit || 200), combo_size: String((INITIAL_STATE.teams || {}).combo_size || 6), members: ["", "", "", "", ""] },
+  teams: { q: "", min_games: String((INITIAL_STATE.teams || {}).min_games || 500), limit: String(INITIAL_STATE.limit || 200), combo_size: String((INITIAL_STATE.teams || {}).combo_size || 6), members: ["", "", "", "", ""] },
 };
 
 function saveSearchStateForView(view) {
@@ -544,6 +544,7 @@ let hasPrewarmedDetail = false;
 let usedInitialPokemon = false;
 let usedInitialAttacks = false;
 let usedInitialTeams = false;
+let teamLoadRequestId = 0;
 
 function applyI18n() {
   document.documentElement.lang = currentLang;
@@ -829,6 +830,16 @@ function defaultOrderForTeam(k){
   return (k === "name") ? "asc" : "desc";
 }
 
+function updateMobileSortIndicators(kind, activeKey, activeOrder){
+  document.querySelectorAll(`.mobileSortStat[data-mobile-sort-kind="${kind}"]`).forEach(stat => {
+    const ind = stat.querySelector(".mobileSortInd");
+    const isActive = stat.dataset.mobileSort === activeKey;
+    stat.classList.toggle("isActive", isActive);
+    stat.setAttribute("aria-pressed", isActive ? "true" : "false");
+    if (ind) ind.textContent = isActive ? (activeOrder === "asc" ? "▲" : "▼") : "";
+  });
+}
+
 function updateSortIndicators(){
   document.querySelectorAll('#pokemonHead th[data-sort]').forEach(th => {
     const k = th.dataset.sort;
@@ -845,6 +856,7 @@ function updateSortIndicators(){
       if (ind) ind.textContent = "";
     }
   });
+  updateMobileSortIndicators("pokemon", sortState.key, sortState.order);
 }
 
 function updateAttackSortIndicators(){
@@ -863,6 +875,7 @@ function updateAttackSortIndicators(){
       if (ind) ind.textContent = "";
     }
   });
+  updateMobileSortIndicators("attacks", attackSortState.key, attackSortState.order);
 }
 
 function updateTeamSortIndicators(){
@@ -881,6 +894,7 @@ function updateTeamSortIndicators(){
       if (ind) ind.textContent = "";
     }
   });
+  updateMobileSortIndicators("teams", teamSortState.key, teamSortState.order);
 }
 
 function setSort(k){
@@ -1056,13 +1070,14 @@ function renderTeamRows(items, comboSizeFallback) {
     const td0 = document.createElement("td");
     td0.innerHTML = teamMembersHtml(item.members, item.combo_size || comboSizeFallback, item.games || 0, item.wins || 0);
     tr.appendChild(td0);
-    const td1 = document.createElement("td"); td1.innerHTML = pokemonStatCellHtml(t("winrate"), fmtPct(item.winrate || 0)); tr.appendChild(td1);
-    const td2 = document.createElement("td"); td2.innerHTML = pokemonStatCellHtml(t("games"), `${item.games || 0}`); tr.appendChild(td2);
-    const td3 = document.createElement("td"); td3.innerHTML = pokemonStatCellHtml(t("popularity"), fmtPct(item.popularity || 0)); tr.appendChild(td3);
-    const td4 = document.createElement("td"); td4.innerHTML = pokemonStatCellHtml(t("avgElo"), fmt1(item.avg_elo || 0)); tr.appendChild(td4);
+    const td1 = document.createElement("td"); td1.innerHTML = sortableMobileStatHtml(t("winrate"), fmtPct(item.winrate || 0), "winrate", "teams"); tr.appendChild(td1);
+    const td2 = document.createElement("td"); td2.innerHTML = sortableMobileStatHtml(t("games"), `${item.games || 0}`, "games", "teams"); tr.appendChild(td2);
+    const td3 = document.createElement("td"); td3.innerHTML = sortableMobileStatHtml(t("popularity"), fmtPct(item.popularity || 0), "popularity", "teams"); tr.appendChild(td3);
+    const td4 = document.createElement("td"); td4.innerHTML = sortableMobileStatHtml(t("avgElo"), fmt1(item.avg_elo || 0), "avg_elo", "teams"); tr.appendChild(td4);
     tbody.appendChild(tr);
   }
   hydrateTeamPreloadedRows();
+  updateTeamSortIndicators();
 }
 
 function useInitialPreloadedView(view) {
@@ -1089,8 +1104,9 @@ function useInitialPreloadedView(view) {
   }
 
   if (view === "teams") {
-    if (parseInt(el("min_games").value || "0", 10) !== Number((INITIAL_STATE.teams || {}).min_games || 50)) return false;
+    if (parseInt(el("min_games").value || "0", 10) !== Number((INITIAL_STATE.teams || {}).min_games || 500)) return false;
     if (teamSortState.key !== (INITIAL_STATE.teams || {}).sort || teamSortState.order !== (INITIAL_STATE.teams || {}).order) return false;
+    if (selectedTeamMemberKeys().length) return false;
     const comboSize = String(parseInt(el("combo_size").value || "0", 10) || 6);
     const preloadedBySize = (INITIAL_STATE.teams || {}).by_size || {};
     if (!Array.isArray(preloadedBySize[comboSize])) return false;
@@ -1268,6 +1284,7 @@ function teamMembersHtml(members, comboSize, games, wins) {
 
 async function loadTeams() {
   const f = getFilters();
+  const requestId = ++teamLoadRequestId;
   updateTeamSortIndicators();
   if (useInitialPreloadedView("teams")) return;
 
@@ -1288,6 +1305,7 @@ async function loadTeams() {
 
   const res = await fetch("/api/teams?" + params.toString());
   const data = await res.json();
+  if (requestId !== teamLoadRequestId) return;
 
   el("meta").textContent =
     `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${data.elo_min}-${data.elo_max} • ${t("matchesMeta")}: ${data.meta.matches}`;
@@ -1305,8 +1323,8 @@ function attackNameWithTypeHtml(name, typeName) {
   return `<div class="attackNameWrap"><span>${escapeHtml(name || "-")}</span>${typeIconsHtml([typeName || "Unknown"])}</div>`;
 }
 
-function pokemonStatCellHtml(label, value) {
-  return `<div class="mobileStat"><span class="mobileStatLabel">${escapeHtml(label)}</span><b class="mobileStatValue">${escapeHtml(value)}</b></div>`;
+function sortableMobileStatHtml(label, value, sortKey, sortKind) {
+  return `<div class="mobileStat mobileSortStat" data-mobile-sort="${escapeHtml(sortKey)}" data-mobile-sort-kind="${escapeHtml(sortKind)}" role="button" tabindex="0"><span class="mobileStatLabel">${escapeHtml(label)}</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">${escapeHtml(value)}</b></span></div>`;
 }
 
 function prewarmDetailIfNeeded(items, f) {
@@ -1421,17 +1439,18 @@ async function loadList() {
     const img = td0.querySelector("img");
     img.onerror = function() { nextSprite(this); };
 
-    const td1 = document.createElement("td"); td1.innerHTML = pokemonStatCellHtml(t("winrate"), fmtPct(r.winrate)); tr.appendChild(td1);
-    const td2 = document.createElement("td"); td2.innerHTML = pokemonStatCellHtml(t("games"), `${r.games}`); tr.appendChild(td2);
-    const td3 = document.createElement("td"); td3.innerHTML = pokemonStatCellHtml(t("popularity"), fmtPct(r.popularity)); tr.appendChild(td3);
-    const td4 = document.createElement("td"); td4.innerHTML = pokemonStatCellHtml(t("leadRate"), fmtPct(r.lead_rate)); tr.appendChild(td4);
-    const td5 = document.createElement("td"); td5.innerHTML = pokemonStatCellHtml("K/D", fmt1(r.kd)); tr.appendChild(td5);
-    const td6 = document.createElement("td"); td6.innerHTML = pokemonStatCellHtml(t("dmgDealt"), fmt1(r.dmg_dealt_avg)); tr.appendChild(td6);
-    const td7 = document.createElement("td"); td7.innerHTML = pokemonStatCellHtml(t("dmgTaken"), fmt1(r.dmg_taken_avg)); tr.appendChild(td7);
-    const td8 = document.createElement("td"); td8.innerHTML = pokemonStatCellHtml(t("avgElo"), fmt1(r.avg_elo)); tr.appendChild(td8);
+    const td1 = document.createElement("td"); td1.innerHTML = sortableMobileStatHtml(t("winrate"), fmtPct(r.winrate), "winrate", "pokemon"); tr.appendChild(td1);
+    const td2 = document.createElement("td"); td2.innerHTML = sortableMobileStatHtml(t("games"), `${r.games}`, "games", "pokemon"); tr.appendChild(td2);
+    const td3 = document.createElement("td"); td3.innerHTML = sortableMobileStatHtml(t("popularity"), fmtPct(r.popularity), "popularity", "pokemon"); tr.appendChild(td3);
+    const td4 = document.createElement("td"); td4.innerHTML = sortableMobileStatHtml(t("leadRate"), fmtPct(r.lead_rate), "lead_rate", "pokemon"); tr.appendChild(td4);
+    const td5 = document.createElement("td"); td5.innerHTML = sortableMobileStatHtml("K/D", fmt1(r.kd), "kd", "pokemon"); tr.appendChild(td5);
+    const td6 = document.createElement("td"); td6.innerHTML = sortableMobileStatHtml(t("dmgDealt"), fmt1(r.dmg_dealt_avg), "dmg_dealt", "pokemon"); tr.appendChild(td6);
+    const td7 = document.createElement("td"); td7.innerHTML = sortableMobileStatHtml(t("dmgTaken"), fmt1(r.dmg_taken_avg), "dmg_taken", "pokemon"); tr.appendChild(td7);
+    const td8 = document.createElement("td"); td8.innerHTML = sortableMobileStatHtml(t("avgElo"), fmt1(r.avg_elo), "avg_elo", "pokemon"); tr.appendChild(td8);
 
     tbody.appendChild(tr);
   }
+  updateSortIndicators();
   usedInitialPokemon = false;
 }
 
@@ -1617,11 +1636,41 @@ async function loadDetail(key, nameHint) {
 
 el("q").addEventListener("input", debouncedLoadActive);
 ["min_games","limit"].forEach(id => el(id).addEventListener("input", debouncedLoadActive));
+["min_games","limit"].forEach(id => el(id).addEventListener("change", debouncedLoadActive));
 
 el("rows").addEventListener("click", (e) => {
+  if (window.matchMedia("(max-width: 720px)").matches && e.target.closest(".mobileSortStat")) return;
   const tr = e.target.closest("tr[data-key]");
   if (!tr || !el("rows").contains(tr)) return;
   loadDetail(tr.dataset.key || "", tr.dataset.name || "");
+});
+
+function activateMobileSort(trigger) {
+  if (!trigger || !window.matchMedia("(max-width: 720px)").matches) return;
+  const sortKey = trigger.dataset.mobileSort || "";
+  const sortKind = trigger.dataset.mobileSortKind || "";
+  if (!sortKey || !sortKind) return;
+  if (sortKind === "pokemon") setSort(sortKey);
+  else if (sortKind === "teams") setTeamSort(sortKey);
+  else if (sortKind === "attacks") setAttackSort(sortKey);
+}
+
+document.querySelectorAll(".tabPanel tbody").forEach(tbody => {
+  tbody.addEventListener("click", (e) => {
+    const trigger = e.target.closest(".mobileSortStat[data-mobile-sort]");
+    if (!trigger || !tbody.contains(trigger)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    activateMobileSort(trigger);
+  });
+  tbody.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const trigger = e.target.closest(".mobileSortStat[data-mobile-sort]");
+    if (!trigger || !tbody.contains(trigger)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    activateMobileSort(trigger);
+  });
 });
 
 el("team_member_slots").addEventListener("click", async (e) => {

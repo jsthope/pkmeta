@@ -756,12 +756,41 @@ tbody tr.clickable:hover{ background: #303030; }
   font-weight: inherit;
 }
 
+.mobileSortStat{
+  position: relative;
+  outline: none;
+}
+
+.mobileSortStat:focus-visible{
+  box-shadow: 0 0 0 2px rgba(255,255,255,.16);
+}
+
+.mobileSortInd{
+  display: none;
+  min-width: 12px;
+  font-size: 11px;
+  color: rgba(255,255,255,.72);
+  text-align: center;
+}
+
+.mobileStatValueWrap{
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mobileSortStat.isActive{
+  border-color: rgba(255,255,255,.18);
+}
+
 @media (max-width: 720px){
   :root{ --spriteTable: 48px; }
   .poke{ min-width: unset; }
   .teamControls{ flex-direction: column; }
   .teamPicker{ position: static; width: 100%; }
   .teamMemberSlot{ min-width: calc(50% - 4px); max-width: none; }
+  .mobileSortInd{ display: inline-block; }
 }
 
 .btn{
@@ -1205,6 +1234,16 @@ html.modal-open body{ overflow: hidden; }
     border: 1px solid rgba(255,255,255,.08);
     border-radius: 6px;
     background: #2f2f2f;
+  }
+
+  #panel_pokemon .mobileSortStat,
+  #panel_teams .mobileSortStat{
+    cursor: pointer;
+  }
+
+  #panel_pokemon .mobileSortStat:active,
+  #panel_teams .mobileSortStat:active{
+    background: #383838;
   }
 
   #panel_teams .mobileStat{
