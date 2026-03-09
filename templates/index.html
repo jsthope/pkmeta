@@ -1562,7 +1562,7 @@ async function loadDetail(key, nameHint) {
     const moves = (d.moves || []).slice(0, 15);
     const items = (d.items || []).slice(0, 15);
     const abilities = (d.abilities || []).slice(0, 6);
-    const movesTot = moves.reduce((a, x) => a + (Number(x.uses) || 0), 0) || 1;
+    const movesTot = Number(d.games) || 1;
     const itemsTot = items.reduce((a, x) => a + (Number(x.uses) || 0), 0) || 1;
 
     const mv = document.getElementById("moves");

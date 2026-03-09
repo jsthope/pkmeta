@@ -68,6 +68,7 @@ def parse_log_moves(log: str) -> Optional[ParsedMoveMatch]:
     players: Dict[str, str] = {}
     winner_name: Optional[str] = None
     move_uses = {"p1": defaultdict(int), "p2": defaultdict(int)}
+    seen_moves = {"p1": set(), "p2": set()}
 
     for line in log.split("\n"):
         if not line or line[0] != "|":
@@ -93,6 +94,9 @@ def parse_log_moves(log: str) -> Optional[ParsedMoveMatch]:
             mv_name = parts[3].strip()
             if not mv_name:
                 continue
+            if mv_name in seen_moves[side]:
+                continue
+            seen_moves[side].add(mv_name)
             move_uses[side][mv_name] += 1
 
     winner_side: Optional[str] = None
@@ -217,13 +221,13 @@ def rollup_all(conn: sqlite3.Connection) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data_dir", default="data")
+    ap.add_argument("--data_dir", default="metamon-raw-replays/data")
     ap.add_argument("--glob", default="train-*.parquet")
     ap.add_argument("--out", default="attacks.sqlite")
     ap.add_argument("--elo_step", type=int, default=100)
     ap.add_argument("--batch_size", type=int, default=8192)
     ap.add_argument("--flush", type=int, default=100000)
-    ap.add_argument("--fast_sqlite", action="store_true", help="Use faster SQLite pragmas (synchronous=OFF)")
+    ap.add_argument("--fast_sqlite", action="store_true", default=True, help="Use faster SQLite pragmas (synchronous=OFF)")
     ap.add_argument("--max_files", type=int, default=0, help="Process only N parquet files (0 = all)")
     ap.add_argument("--skip_files", type=int, default=0, help="Skip K parquet files before processing")
     ap.add_argument("--moves_json", default="", help="Optional local path to moves.json (Pokemon Showdown format)")

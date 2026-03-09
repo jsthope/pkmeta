@@ -151,6 +151,7 @@ def parse_log_one_pass(log: str) -> Optional[ParsedMatch]:
     first_active: Dict[str, Optional[str]] = {"p1": None, "p2": None}
     last_move_user: Optional[Tuple[str, str]] = None
     seen_abilities: Dict[str, set[Tuple[str, str]]] = {"p1": set(), "p2": set()}
+    seen_moves: Dict[str, set[Tuple[str, str]]] = {"p1": set(), "p2": set()}
 
     for line in log.split("\n"):
         if not line or line[0] != "|":
@@ -214,7 +215,10 @@ def parse_log_one_pass(log: str) -> Optional[ParsedMatch]:
                 continue
             mv = parts[3].strip()
             if mv:
-                moves[side][(k, mv)] += 1
+                kk = (k, mv)
+                if kk not in seen_moves[side]:
+                    seen_moves[side].add(kk)
+                    moves[side][kk] += 1
             last_move_user = (side, k)
 
         elif tag in ("-item", "-enditem", "item") and len(parts) >= 4:
@@ -582,13 +586,13 @@ def rollup_all(conn: sqlite3.Connection) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data_dir", default="data")
+    ap.add_argument("--data_dir", default="metamon-raw-replays/data")
     ap.add_argument("--glob", default="train-*.parquet")
     ap.add_argument("--out", default="stats.sqlite")
     ap.add_argument("--elo_step", type=int, default=100)
     ap.add_argument("--batch_size", type=int, default=8192)
     ap.add_argument("--flush", type=int, default=100000)
-    ap.add_argument("--fast_sqlite", action="store_true", help="Use faster SQLite pragmas (synchronous=OFF)")
+    ap.add_argument("--fast_sqlite", action="store_true", default=True, help="Use faster SQLite pragmas (synchronous=OFF)")
 
     ap.add_argument("--max_files", type=int, default=0, help="Process only N parquet files (0 = all)")
     ap.add_argument("--skip_files", type=int, default=0, help="Skip K parquet files before processing")

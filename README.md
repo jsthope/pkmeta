@@ -8,7 +8,7 @@ Replay data used to build the database comes from:
 
 - https://huggingface.co/datasets/jakegrigsby/metamon-raw-replays
 
-Use the parquet files from that dataset (for example in a local `data/` folder) to generate `stats.sqlite` and `attacks.sqlite`.
+Use the parquet files from that dataset (default path: `metamon-raw-replays/data`) to generate `stats.sqlite` and `attacks.sqlite`.
 
 ## Build the database
 
@@ -21,9 +21,9 @@ pip install -r requirements.txt
 Generate the SQLite database from parquet files:
 
 ```bash
-python3 tools/build_stats.py --data_dir data --out stats.sqlite
-python3 tools/build_attack_stats.py --data_dir data --out attacks.sqlite
-python3 tools/build_team_stats.py --data_dir data --out teams.sqlite
+python3 tools/build_stats.py --out stats.sqlite
+python3 tools/build_attack_stats.py --out attacks.sqlite
+python3 tools/build_team_stats.py --out teams.sqlite
 ```
 
 ## Run the app
