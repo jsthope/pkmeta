@@ -79,8 +79,9 @@ def parse_log_moves(log: str) -> Optional[ParsedMoveMatch]:
 
         if tag == "player" and len(parts) >= 4:
             side = parts[2]
-            if side in ("p1", "p2"):
-                players[side] = parts[3]
+            name = parts[3].strip()
+            if side in ("p1", "p2") and name:
+                players[side] = name
 
         elif tag == "win" and len(parts) >= 3:
             winner_name = parts[2]
