@@ -146,6 +146,9 @@
           </tbody>
         </table>
       </div>
+      <div class="card rulesNotice">
+        <p id="rules_notice" class="lede">Pokemon Showdown follows Smogon rules, so banned Pokemon are not included in this list.</p>
+      </div>
     </div>
 
     <div id="panel_attacks" class="tabPanel">
@@ -580,6 +583,7 @@ function applyI18n() {
   el("lbl_team_size").textContent = t("teamSize");
   el("lbl_team_members").textContent = t("teamFilter");
   el("team_picker_search").placeholder = t("searchPokemon");
+  el("rules_notice").textContent = t("rulesNotice");
   el("modalClose").textContent = t("closeEsc");
   if (!el("meta").textContent || /loading|chargement/i.test(el("meta").textContent)) {
     el("meta").textContent = t("loadingDots");

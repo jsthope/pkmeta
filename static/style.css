@@ -387,6 +387,15 @@ input:focus, select:focus{
   gap: 8px;
 }
 
+.rulesNotice{
+  margin-top: 14px;
+}
+
+.rulesNotice .lede{
+  margin: 0;
+  max-width: none;
+}
+
 .tabs{
   display: inline-flex;
   gap: 8px;
