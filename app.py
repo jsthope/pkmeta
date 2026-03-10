@@ -638,6 +638,8 @@ def _home_pokemon_rows(
         conn.close()
 
     matches = int(matches_row["m"]) if matches_row else 0
+    total_teams = matches * 2
+    total_teams = matches * 2
     denom = max(1, 2 * matches)
     poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
     localized_name_map = load_pokemon_localized_name_map(lang)
@@ -798,6 +800,7 @@ def _attack_items_payload(
 
     move_localized_map = load_move_localized_name_map(lang_norm)
     matches = int(matches_row["m"]) if matches_row else 0
+    total_teams = matches * 2
     items: List[Dict[str, Any]] = []
     for r in rows:
         games = int(r["games"])
@@ -831,6 +834,7 @@ def _attack_items_payload(
                 "games": games,
                 "wins": wins,
                 "uses": uses,
+                "use_rate": (games / total_teams) if total_teams else 0.0,
                 "winrate": (wins / games) if games else 0.0,
                 "avg_elo": (sum_elo / games) if games else 0.0,
             }
@@ -838,7 +842,7 @@ def _attack_items_payload(
 
     reverse = (order != "asc")
     if sort == "uses":
-        items.sort(key=lambda x: x["uses"], reverse=reverse)
+        items.sort(key=lambda x: x["use_rate"], reverse=reverse)
     elif sort == "games":
         items.sort(key=lambda x: x["games"], reverse=reverse)
     elif sort == "avg_elo":
@@ -879,7 +883,7 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
         q="",
         lang=lang,
         selected_types=set(),
-        sort="winrate",
+        sort="uses",
         order="desc",
         min_games=DEFAULT_HOME_ATTACK_MIN_GAMES,
         limit=DEFAULT_HOME_LIMIT,
@@ -936,7 +940,7 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
             "types": initial_types,
             "matches": pokemon["matches"],
             "pokemon": {"min_games": DEFAULT_HOME_MIN_GAMES, "sort": "popularity", "order": "desc", "preloaded": True},
-            "attacks": {"min_games": DEFAULT_HOME_ATTACK_MIN_GAMES, "sort": "winrate", "order": "desc", "preloaded": True},
+            "attacks": {"min_games": DEFAULT_HOME_ATTACK_MIN_GAMES, "sort": "uses", "order": "desc", "preloaded": True},
             "teams": {
                 "min_games": DEFAULT_HOME_TEAM_MIN_GAMES,
                 "sort": "popularity",
@@ -2120,7 +2124,7 @@ def make_app(
         qid = _to_id(q)
         lang = _normalize_lang(request.args.get("lang", "en") or "en")
         selected_types = _parse_types_param(request.args.get("types", "") or request.args.get("type", "") or "")
-        sort = (request.args.get("sort", "winrate") or "winrate").strip().lower()
+        sort = (request.args.get("sort", "uses") or "uses").strip().lower()
         order = (request.args.get("order", "desc") or "desc").strip().lower()
         min_games = clamp_int(request.args.get("min_games", 2000), 0, 10_000_000)
         limit = clamp_int(request.args.get("limit", 200), 10, 2000)
@@ -2174,6 +2178,7 @@ def make_app(
         move_localized_map = load_move_localized_name_map(lang)
 
         matches = int(matches_row["m"]) if matches_row else 0
+        total_teams = matches * 2
         items: List[Dict[str, Any]] = []
         for r in rows:
             games = int(r["games"])
@@ -2207,6 +2212,7 @@ def make_app(
                     "games": games,
                     "wins": wins,
                     "uses": uses,
+                    "use_rate": (games / total_teams) if total_teams else 0.0,
                     "winrate": (wins / games) if games else 0.0,
                     "avg_elo": (sum_elo / games) if games else 0.0,
                 }
@@ -2214,7 +2220,7 @@ def make_app(
 
         reverse = (order != "asc")
         if sort == "uses":
-            items.sort(key=lambda x: x["uses"], reverse=reverse)
+            items.sort(key=lambda x: x["use_rate"], reverse=reverse)
         elif sort == "games":
             items.sort(key=lambda x: x["games"], reverse=reverse)
         elif sort == "avg_elo":

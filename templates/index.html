@@ -159,7 +159,7 @@
               <th data-attack-sort="move">Attack <span class="sortInd"></span></th>
               <th data-attack-sort="winrate">Winrate <span class="sortInd"></span></th>
               <th data-attack-sort="games">Games <span class="sortInd"></span></th>
-              <th data-attack-sort="uses">Uses <span class="sortInd"></span></th>
+              <th data-attack-sort="uses">Usage <span class="sortInd"></span></th>
               <th data-attack-sort="avg_elo">Avg ELO <span class="sortInd"></span></th>
             </tr>
           </thead>
@@ -178,7 +178,7 @@
               </td>
               <td>{{ '%.1f'|format(a.winrate * 100) }}%</td>
               <td>{{ '{:,}'.format(a.games).replace(',', '\u202f') }}</td>
-              <td>{{ '{:,}'.format(a.uses).replace(',', '\u202f') }}</td>
+              <td>{{ '%.1f'|format(a.use_rate * 100) }}%</td>
               <td>{{ '{:,.1f}'.format(a.avg_elo).replace(',', '\u202f') }}</td>
             </tr>
             {% endfor %}
@@ -537,7 +537,7 @@ const sortState = {
 };
 
 const attackSortState = {
-  key: "winrate",
+  key: "uses",
   order: "desc",
 };
 
@@ -611,7 +611,7 @@ function applyI18n() {
     move: t("attack"),
     winrate: t("winrate"),
     games: t("games"),
-    uses: t("uses"),
+    uses: t("popularity"),
     avg_elo: t("avgElo"),
   };
   document.querySelectorAll("#attackHead th[data-attack-sort]").forEach(th => {
@@ -1059,7 +1059,7 @@ function renderAttackRows(items) {
     const td0 = document.createElement("td"); td0.innerHTML = attackNameWithTypeHtml(a.localized_move_name || a.move_name || a.move_id || "-", a.move_type || "Unknown"); tr.appendChild(td0);
     const td1 = document.createElement("td"); td1.textContent = fmtPct(a.winrate || 0); tr.appendChild(td1);
     const td2 = document.createElement("td"); td2.textContent = fmtInt(a.games || 0); tr.appendChild(td2);
-    const td3 = document.createElement("td"); td3.textContent = fmtInt(a.uses || 0); tr.appendChild(td3);
+    const td3 = document.createElement("td"); td3.textContent = fmtPct(a.use_rate || 0); tr.appendChild(td3);
     const td4 = document.createElement("td"); td4.textContent = fmt1(a.avg_elo || 0); tr.appendChild(td4);
     tbody.appendChild(tr);
   }
