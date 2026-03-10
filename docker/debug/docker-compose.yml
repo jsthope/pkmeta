@@ -12,5 +12,5 @@ services:
     volumes:
       - ../../stats.sqlite:/app/stats.sqlite:ro
       - ../../attacks.sqlite:/app/attacks.sqlite:ro
-      - ../../teams.sqlite:/app/teams.sqlite:ro
+      - ../../teams.sqlite:/app/teams.sqlite
     restart: unless-stopped
