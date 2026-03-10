@@ -366,6 +366,13 @@ function fmt1(x) {
     maximumFractionDigits: 1,
   }).format(Number(x) || 0));
 }
+function fmt1NoGroup(x) {
+  return new Intl.NumberFormat(currentLang === "fr" ? "fr-FR" : "en-US", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+    useGrouping: false,
+  }).format(Number(x) || 0);
+}
 function fmtPct1(x) { return (Number(x) || 0).toFixed(1) + "%"; }
 
 function escapeHtml(s) {
@@ -1520,7 +1527,7 @@ async function loadDetail(key, nameHint) {
                 <span class="chip"><span>${t("games")}</span> <b>${fmtInt(d.games)}</b></span>
                 <span class="chip"><span>${t("winrate")}</span> <b>${fmtPct(d.winrate)}</b></span>
                 <span class="chip"><span>${t("lead")}</span> <b>${fmtPct(d.lead_rate)}</b></span>
-                <span class="chip"><span>ELO</span> <b>${fmt1(d.avg_elo)}</b></span>
+                <span class="chip"><span>ELO</span> <b>${fmt1NoGroup(d.avg_elo)}</b></span>
               </div>
             </div>
           </div>
