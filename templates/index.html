@@ -129,18 +129,18 @@
                       </div>
                       {% endif %}
                     </div>
-                    <div class="muted">{{ '{:,}'.format(r.games).replace(',', ' ') }} games • {{ '{:,}'.format(r.wins).replace(',', ' ') }} wins</div>
+                    <div class="muted">{{ '{:,}'.format(r.games).replace(',', '\u202f') }} games • {{ '{:,}'.format(r.wins).replace(',', '\u202f') }} wins</div>
                   </div>
                 </div>
               </td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="winrate" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Winrate</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.winrate * 100) }}%</b></span></div></td>
-              <td><div class="mobileStat mobileSortStat" data-mobile-sort="games" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Games</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '{:,}'.format(r.games).replace(',', ' ') }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="games" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Games</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '{:,}'.format(r.games).replace(',', '\u202f') }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="popularity" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Popularity</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.popularity * 100) }}%</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="lead_rate" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Lead rate</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.lead_rate * 100) }}%</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="kd" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">K/D</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.kd) }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="dmg_dealt" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Dmg dealt %</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.dmg_dealt_avg) }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="dmg_taken" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Dmg taken %</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.dmg_taken_avg) }}</b></span></div></td>
-              <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '{:,.1f}'.format(r.avg_elo).replace(',', ' ') }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '{:,.1f}'.format(r.avg_elo).replace(',', '\u202f') }}</b></span></div></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -174,9 +174,9 @@
                 </div>
               </td>
               <td>{{ '%.1f'|format(a.winrate * 100) }}%</td>
-              <td>{{ '{:,}'.format(a.games).replace(',', ' ') }}</td>
-              <td>{{ '{:,}'.format(a.uses).replace(',', ' ') }}</td>
-              <td>{{ '{:,.1f}'.format(a.avg_elo).replace(',', ' ') }}</td>
+              <td>{{ '{:,}'.format(a.games).replace(',', '\u202f') }}</td>
+              <td>{{ '{:,}'.format(a.uses).replace(',', '\u202f') }}</td>
+              <td>{{ '{:,.1f}'.format(a.avg_elo).replace(',', '\u202f') }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -229,14 +229,14 @@
                   </div>
                   <div>
                     <div class="teamNames"><b>{{ item.label }}</b></div>
-                    <div class="muted">{{ item.combo_size }} pokemon • {{ '{:,}'.format(item.games).replace(',', ' ') }} games • {{ '{:,}'.format(item.wins).replace(',', ' ') }} wins</div>
+                    <div class="muted">{{ item.combo_size }} pokemon • {{ '{:,}'.format(item.games).replace(',', '\u202f') }} games • {{ '{:,}'.format(item.wins).replace(',', '\u202f') }} wins</div>
                   </div>
                 </div>
               </td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="winrate" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Winrate</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(item.winrate * 100) }}%</b></span></div></td>
-              <td><div class="mobileStat mobileSortStat" data-mobile-sort="games" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Games</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '{:,}'.format(item.games).replace(',', ' ') }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="games" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Games</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '{:,}'.format(item.games).replace(',', '\u202f') }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="popularity" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Popularity</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(item.popularity * 100) }}%</b></span></div></td>
-              <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '{:,.1f}'.format(item.avg_elo).replace(',', ' ') }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '{:,.1f}'.format(item.avg_elo).replace(',', '\u202f') }}</b></span></div></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -351,17 +351,20 @@ function languagePath(lang) {
   return lang === "en" ? "/" : `/${lang}`;
 }
 
+function withNbspGroups(value) {
+  return String(value).replace(/[\u00a0\u202f,]/g, "\u202f");
+}
 function fmtInt(x) {
-  return new Intl.NumberFormat(currentLang === "en" ? "en-US" : "fr-FR", {
+  return withNbspGroups(new Intl.NumberFormat(currentLang === "fr" ? "fr-FR" : "en-US", {
     maximumFractionDigits: 0,
-  }).format(Number(x) || 0).replace(/\u202f/g, " ");
+  }).format(Number(x) || 0));
 }
 function fmtPct(x) { return (100*x).toFixed(1) + "%"; }
 function fmt1(x) {
-  return new Intl.NumberFormat(currentLang === "en" ? "en-US" : "fr-FR", {
+  return withNbspGroups(new Intl.NumberFormat(currentLang === "fr" ? "fr-FR" : "en-US", {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
-  }).format(Number(x) || 0).replace(/\u202f/g, " ");
+  }).format(Number(x) || 0));
 }
 function fmtPct1(x) { return (Number(x) || 0).toFixed(1) + "%"; }
 

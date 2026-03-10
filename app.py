@@ -525,7 +525,7 @@ def _seo_context_for_lang(lang: str) -> Dict[str, Any]:
 
 
 def _human_int(x: int) -> str:
-    return f"{int(x):,}".replace(",", " ")
+    return f"{int(x):,}".replace(",", "\u202f")
 
 
 def _footer_copy_for_lang(lang: str) -> Dict[str, str]:
