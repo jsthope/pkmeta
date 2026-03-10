@@ -129,18 +129,18 @@
                       </div>
                       {% endif %}
                     </div>
-                    <div class="muted">{{ r.games }} games • {{ r.wins }} wins</div>
+                    <div class="muted">{{ '{:,}'.format(r.games).replace(',', ' ') }} games • {{ '{:,}'.format(r.wins).replace(',', ' ') }} wins</div>
                   </div>
                 </div>
               </td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="winrate" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Winrate</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.winrate * 100) }}%</b></span></div></td>
-              <td><div class="mobileStat mobileSortStat" data-mobile-sort="games" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Games</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ r.games }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="games" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Games</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '{:,}'.format(r.games).replace(',', ' ') }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="popularity" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Popularity</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.popularity * 100) }}%</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="lead_rate" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Lead rate</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.lead_rate * 100) }}%</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="kd" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">K/D</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.kd) }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="dmg_dealt" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Dmg dealt %</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.dmg_dealt_avg) }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="dmg_taken" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Dmg taken %</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.dmg_taken_avg) }}</b></span></div></td>
-              <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(r.avg_elo) }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '{:,.1f}'.format(r.avg_elo).replace(',', ' ') }}</b></span></div></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -174,9 +174,9 @@
                 </div>
               </td>
               <td>{{ '%.1f'|format(a.winrate * 100) }}%</td>
-              <td>{{ a.games }}</td>
-              <td>{{ a.uses }}</td>
-              <td>{{ '%.1f'|format(a.avg_elo) }}</td>
+              <td>{{ '{:,}'.format(a.games).replace(',', ' ') }}</td>
+              <td>{{ '{:,}'.format(a.uses).replace(',', ' ') }}</td>
+              <td>{{ '{:,.1f}'.format(a.avg_elo).replace(',', ' ') }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -229,14 +229,14 @@
                   </div>
                   <div>
                     <div class="teamNames"><b>{{ item.label }}</b></div>
-                    <div class="muted">{{ item.combo_size }} pokemon • {{ item.games }} games • {{ item.wins }} wins</div>
+                    <div class="muted">{{ item.combo_size }} pokemon • {{ '{:,}'.format(item.games).replace(',', ' ') }} games • {{ '{:,}'.format(item.wins).replace(',', ' ') }} wins</div>
                   </div>
                 </div>
               </td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="winrate" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Winrate</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(item.winrate * 100) }}%</b></span></div></td>
-              <td><div class="mobileStat mobileSortStat" data-mobile-sort="games" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Games</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ item.games }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="games" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Games</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '{:,}'.format(item.games).replace(',', ' ') }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="popularity" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Popularity</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(item.popularity * 100) }}%</b></span></div></td>
-              <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '%.1f'|format(item.avg_elo) }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ '{:,.1f}'.format(item.avg_elo).replace(',', ' ') }}</b></span></div></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -351,8 +351,18 @@ function languagePath(lang) {
   return lang === "en" ? "/" : `/${lang}`;
 }
 
+function fmtInt(x) {
+  return new Intl.NumberFormat(currentLang === "en" ? "en-US" : "fr-FR", {
+    maximumFractionDigits: 0,
+  }).format(Number(x) || 0).replace(/\u202f/g, " ");
+}
 function fmtPct(x) { return (100*x).toFixed(1) + "%"; }
-function fmt1(x) { return (Number(x) || 0).toFixed(1); }
+function fmt1(x) {
+  return new Intl.NumberFormat(currentLang === "en" ? "en-US" : "fr-FR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(Number(x) || 0).replace(/\u202f/g, " ");
+}
 function fmtPct1(x) { return (Number(x) || 0).toFixed(1) + "%"; }
 
 function escapeHtml(s) {
@@ -977,7 +987,7 @@ function updateEloUI(changed) {
     smax.value = mx;
   }
 
-  el("elo_label").textContent = `${mn} – ${mx}`;
+  el("elo_label").textContent = `${fmtInt(mn)} - ${fmtInt(mx)}`;
 
   const minBound = parseInt(smin.min || "0", 10);
   const maxBound = parseInt(smin.max || "2000", 10);
@@ -1000,7 +1010,7 @@ function matchesInitialWindow() {
 }
 
 function setDefaultMeta() {
-  el("meta").textContent = `${t("formatMeta")}: ${INITIAL_STATE.default_format} • ${t("eloMeta")}: ${INITIAL_STATE.elo_min}-${INITIAL_STATE.elo_max} • ${t("matchesMeta")}: ${INITIAL_STATE.matches}`;
+  el("meta").textContent = `${t("formatMeta")}: ${INITIAL_STATE.default_format} • ${t("eloMeta")}: ${fmtInt(INITIAL_STATE.elo_min)}-${fmtInt(INITIAL_STATE.elo_max)} • ${t("matchesMeta")}: ${fmtInt(INITIAL_STATE.matches)}`;
 }
 
 function hydratePokemonPreloadedRows() {
@@ -1034,8 +1044,8 @@ function renderAttackRows(items) {
     const tr = document.createElement("tr");
     const td0 = document.createElement("td"); td0.innerHTML = attackNameWithTypeHtml(a.localized_move_name || a.move_name || a.move_id || "-", a.move_type || "Unknown"); tr.appendChild(td0);
     const td1 = document.createElement("td"); td1.textContent = fmtPct(a.winrate || 0); tr.appendChild(td1);
-    const td2 = document.createElement("td"); td2.textContent = `${a.games || 0}`; tr.appendChild(td2);
-    const td3 = document.createElement("td"); td3.textContent = `${a.uses || 0}`; tr.appendChild(td3);
+    const td2 = document.createElement("td"); td2.textContent = fmtInt(a.games || 0); tr.appendChild(td2);
+    const td3 = document.createElement("td"); td3.textContent = fmtInt(a.uses || 0); tr.appendChild(td3);
     const td4 = document.createElement("td"); td4.textContent = fmt1(a.avg_elo || 0); tr.appendChild(td4);
     tbody.appendChild(tr);
   }
@@ -1071,7 +1081,7 @@ function renderTeamRows(items, comboSizeFallback) {
     td0.innerHTML = teamMembersHtml(item.members, item.combo_size || comboSizeFallback, item.games || 0, item.wins || 0);
     tr.appendChild(td0);
     const td1 = document.createElement("td"); td1.innerHTML = sortableMobileStatHtml(t("winrate"), fmtPct(item.winrate || 0), "winrate", "teams"); tr.appendChild(td1);
-    const td2 = document.createElement("td"); td2.innerHTML = sortableMobileStatHtml(t("games"), `${item.games || 0}`, "games", "teams"); tr.appendChild(td2);
+    const td2 = document.createElement("td"); td2.innerHTML = sortableMobileStatHtml(t("games"), fmtInt(item.games || 0), "games", "teams"); tr.appendChild(td2);
     const td3 = document.createElement("td"); td3.innerHTML = sortableMobileStatHtml(t("popularity"), fmtPct(item.popularity || 0), "popularity", "teams"); tr.appendChild(td3);
     const td4 = document.createElement("td"); td4.innerHTML = sortableMobileStatHtml(t("avgElo"), fmt1(item.avg_elo || 0), "avg_elo", "teams"); tr.appendChild(td4);
     tbody.appendChild(tr);
@@ -1259,7 +1269,7 @@ async function loadAttacks() {
 
   const res = await fetch("/api/attacks?" + params.toString());
   const data = await res.json();
-  el("meta").textContent = `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${data.elo_min}-${data.elo_max} • ${t("matchesMeta")}: ${data.meta.matches}`;
+  el("meta").textContent = `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${fmtInt(data.elo_min)}-${fmtInt(data.elo_max)} • ${t("matchesMeta")}: ${fmtInt(data.meta.matches)}`;
   renderAttackRows(Array.isArray(data.items) ? data.items : []);
   usedInitialAttacks = false;
 }
@@ -1277,7 +1287,7 @@ function teamMembersHtml(members, comboSize, games, wins) {
       <div class="teamSprites">${sprites}</div>
       <div>
         <div class="teamNames"><b>${names}</b></div>
-        <div class="muted">${comboSize} ${t("tabPokemon").toLowerCase()} • ${games} ${t("games").toLowerCase()} • ${wins} ${t("wins")}</div>
+        <div class="muted">${comboSize} ${t("tabPokemon").toLowerCase()} • ${fmtInt(games)} ${t("games").toLowerCase()} • ${fmtInt(wins)} ${t("wins")}</div>
       </div>
     </div>`;
 }
@@ -1308,7 +1318,7 @@ async function loadTeams() {
   if (requestId !== teamLoadRequestId) return;
 
   el("meta").textContent =
-    `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${data.elo_min}-${data.elo_max} • ${t("matchesMeta")}: ${data.meta.matches}`;
+    `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${fmtInt(data.elo_min)}-${fmtInt(data.elo_max)} • ${t("matchesMeta")}: ${fmtInt(data.meta.matches)}`;
   renderTeamRows(Array.isArray(data.items) ? data.items : [], f.combo_size);
   usedInitialTeams = false;
 }
@@ -1366,7 +1376,7 @@ async function loadList() {
   const data = await res.json();
 
   el("meta").textContent =
-    `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${data.elo_min}-${data.elo_max} • ${t("matchesMeta")}: ${data.meta.matches}`;
+    `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${fmtInt(data.elo_min)}-${fmtInt(data.elo_max)} • ${t("matchesMeta")}: ${fmtInt(data.meta.matches)}`;
 
   let items = Array.isArray(data.items) ? data.items : [];
 
@@ -1431,7 +1441,7 @@ async function loadList() {
         <img data-srcs='${JSON.stringify(srcs)}' src="${firstSrc}" alt="" loading="lazy" decoding="async" />
         <div>
           <div class="pokeNameLine"><b>${escapeHtml(r.localized_name || r.name)}</b>${typeIconsHtml(r.types)}</div>
-          <div class="muted">${r.games} ${t("games").toLowerCase()} • ${r.wins} ${t("wins")}</div>
+          <div class="muted">${fmtInt(r.games)} ${t("games").toLowerCase()} • ${fmtInt(r.wins)} ${t("wins")}</div>
         </div>
       </div>`;
     tr.appendChild(td0);
@@ -1440,7 +1450,7 @@ async function loadList() {
     img.onerror = function() { nextSprite(this); };
 
     const td1 = document.createElement("td"); td1.innerHTML = sortableMobileStatHtml(t("winrate"), fmtPct(r.winrate), "winrate", "pokemon"); tr.appendChild(td1);
-    const td2 = document.createElement("td"); td2.innerHTML = sortableMobileStatHtml(t("games"), `${r.games}`, "games", "pokemon"); tr.appendChild(td2);
+    const td2 = document.createElement("td"); td2.innerHTML = sortableMobileStatHtml(t("games"), fmtInt(r.games), "games", "pokemon"); tr.appendChild(td2);
     const td3 = document.createElement("td"); td3.innerHTML = sortableMobileStatHtml(t("popularity"), fmtPct(r.popularity), "popularity", "pokemon"); tr.appendChild(td3);
     const td4 = document.createElement("td"); td4.innerHTML = sortableMobileStatHtml(t("leadRate"), fmtPct(r.lead_rate), "lead_rate", "pokemon"); tr.appendChild(td4);
     const td5 = document.createElement("td"); td5.innerHTML = sortableMobileStatHtml("K/D", fmt1(r.kd), "kd", "pokemon"); tr.appendChild(td5);
@@ -1462,7 +1472,7 @@ function miniRowHtml(x) {
       <img data-srcs='${JSON.stringify(s)}' src="${first}" alt="" loading="lazy" decoding="async"/>
       <div>
         <div class="miniName">${escapeHtml(x.localized_name || x.name)}</div>
-        <div class="miniMeta">${x.games} ${t("games").toLowerCase()} • ${t("rowWinrate")} ${fmtPct(x.winrate)} • ${t("score")} ${(Number(x.score||0)*100).toFixed(1)}%</div>
+        <div class="miniMeta">${fmtInt(x.games)} ${t("games").toLowerCase()} • ${t("rowWinrate")} ${fmtPct(x.winrate)} • ${t("score")} ${(Number(x.score||0)*100).toFixed(1)}%</div>
       </div>
     </div>
   `;
@@ -1504,7 +1514,7 @@ async function loadDetail(key, nameHint) {
             <div>
               <div class="heroTitle">${escapeHtml(d.localized_name || d.name)}</div>
               <div class="heroSub">
-                <span class="chip"><span>${t("games")}</span> <b>${d.games}</b></span>
+                <span class="chip"><span>${t("games")}</span> <b>${fmtInt(d.games)}</b></span>
                 <span class="chip"><span>${t("winrate")}</span> <b>${fmtPct(d.winrate)}</b></span>
                 <span class="chip"><span>${t("lead")}</span> <b>${fmtPct(d.lead_rate)}</b></span>
                 <span class="chip"><span>ELO</span> <b>${fmt1(d.avg_elo)}</b></span>
@@ -1571,7 +1581,7 @@ async function loadDetail(key, nameHint) {
       const p = (100 * u / movesTot);
       return `<div class="listLine">
         <div class="moveWithType"><span>${escapeHtml(x.localized_move || x.move)}</span>${typeIconsHtml([x.type || "Unknown"])}</div>
-        <div class="mono">${u} <span class="muted">(${fmtPct1(p)})</span></div>
+        <div class="mono">${fmtInt(u)} <span class="muted">(${fmtPct1(p)})</span></div>
       </div>`;
     }).join("");
 
@@ -1584,7 +1594,7 @@ async function loadDetail(key, nameHint) {
           <img class="itemico" id="itimg_${idx}" alt="" loading="lazy" decoding="async"/>
           <div>${escapeHtml(x.localized_item || x.item)}</div>
         </div>
-        <div class="mono">${u} <span class="muted">(${fmtPct1(p)})</span></div>
+        <div class="mono">${fmtInt(u)} <span class="muted">(${fmtPct1(p)})</span></div>
       </div>`;
     }).join("");
 
