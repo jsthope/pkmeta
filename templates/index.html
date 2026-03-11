@@ -29,6 +29,34 @@
   <script type="application/ld+json">
   {{ seo.json_ld | tojson }}
   </script>
+  <script>
+  window.__pkmetaAdvanceSprite = function(img) {
+    if (!img || !img.dataset || !img.dataset.srcs) return;
+    let srcs = [];
+    try {
+      srcs = JSON.parse(img.dataset.srcs || "[]");
+    } catch (e) {
+      srcs = [];
+    }
+
+    const current = img.getAttribute("src") || "";
+    while (srcs.length && srcs[0] === current) srcs.shift();
+
+    if (!srcs.length) {
+      img.style.display = "none";
+      return;
+    }
+
+    img.dataset.srcs = JSON.stringify(srcs);
+    img.src = srcs[0];
+  };
+
+  document.addEventListener("error", function(event) {
+    const img = event.target;
+    if (!(img instanceof HTMLImageElement) || !img.dataset || !img.dataset.srcs) return;
+    window.__pkmetaAdvanceSprite(img);
+  }, true);
+  </script>
 </head>
 <body>
   <main class="page">
@@ -385,14 +413,8 @@ function escapeHtml(s) {
 }
 
 function nextSprite(img) {
-  let srcs = [];
-  try { srcs = JSON.parse(img.dataset.srcs || "[]"); } catch(e) { srcs = []; }
-  srcs.shift();
-  if (srcs.length) {
-    img.dataset.srcs = JSON.stringify(srcs);
-    img.src = srcs[0];
-  } else {
-    img.style.display = "none";
+  if (window.__pkmetaAdvanceSprite) {
+    window.__pkmetaAdvanceSprite(img);
   }
 }
 
