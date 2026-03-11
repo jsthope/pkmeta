@@ -54,6 +54,7 @@
   document.addEventListener("error", function(event) {
     const img = event.target;
     if (!(img instanceof HTMLImageElement) || !img.dataset || !img.dataset.srcs) return;
+    img.__pkmetaSkipNextSpriteFallback = true;
     window.__pkmetaAdvanceSprite(img);
   }, true);
   </script>
@@ -413,6 +414,10 @@ function escapeHtml(s) {
 }
 
 function nextSprite(img) {
+  if (img && img.__pkmetaSkipNextSpriteFallback) {
+    delete img.__pkmetaSkipNextSpriteFallback;
+    return;
+  }
   if (window.__pkmetaAdvanceSprite) {
     window.__pkmetaAdvanceSprite(img);
   }
