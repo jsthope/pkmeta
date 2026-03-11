@@ -88,6 +88,20 @@ DEFAULT_HOME_TEAM_MIN_GAMES = 500
 DEFAULT_HOME_TEAM_SIZE = 6
 DATASET_SOURCE_NAME = "metamon-raw-replays"
 DATASET_SOURCE_URL = "https://huggingface.co/datasets/jakegrigsby/metamon-raw-replays"
+SITE_BRAND = (os.environ.get("PKMETA_SITE_BRAND", "Pkmeta") or "Pkmeta").strip()
+CANONICAL_HOST = (os.environ.get("PKMETA_CANONICAL_HOST", "pokemonchampionsmeta.net") or "pokemonchampionsmeta.net").strip().lower()
+if CANONICAL_HOST.startswith("www."):
+    CANONICAL_HOST = CANONICAL_HOST[4:]
+SECONDARY_HOSTS: Set[str] = {
+    host.strip().lower()
+    for host in os.environ.get("PKMETA_SECONDARY_HOSTS", "pkmeta.net,www.pkmeta.net").split(",")
+    if host.strip()
+}
+SECONDARY_HOSTS.add(f"www.{CANONICAL_HOST}")
+SECONDARY_HOSTS.discard(CANONICAL_HOST)
+PUBLIC_HOSTS: Set[str] = set(SECONDARY_HOSTS)
+PUBLIC_HOSTS.add(CANONICAL_HOST)
+PUBLIC_BASE_URL = f"https://{CANONICAL_HOST}"
 
 
 # Sprite URL helpers
@@ -490,8 +504,7 @@ def _normalize_lang(lang: str) -> str:
 
 
 def _language_url(lang: str) -> str:
-    base = "https://pkmeta.net"
-    return base if lang == "en" else f"{base}/{lang}"
+    return PUBLIC_BASE_URL if lang == "en" else f"{PUBLIC_BASE_URL}/{lang}"
 
 
 def _seo_context_for_lang(lang: str) -> Dict[str, Any]:
@@ -506,6 +519,7 @@ def _seo_context_for_lang(lang: str) -> Dict[str, Any]:
 
     return {
         "lang": lang_norm,
+        "site_name": SITE_BRAND,
         "title": copy["title"],
         "description": copy["description"],
         "keywords": copy["keywords"],
@@ -515,7 +529,7 @@ def _seo_context_for_lang(lang: str) -> Dict[str, Any]:
         "json_ld": {
             "@context": "https://schema.org",
             "@type": "WebSite",
-            "name": "pkmeta.net",
+            "name": SITE_BRAND,
             "url": canonical,
             "inLanguage": lang_norm,
             "description": copy["description"],
@@ -1489,21 +1503,19 @@ def make_app(
     @app.before_request
     def force_https_and_canonical_host():
         host = (request.host.split(":", 1)[0] or "").lower()
-        if host not in {"pkmeta.net", "www.pkmeta.net"}:
+        if host not in PUBLIC_HOSTS:
             return None
 
-        if host == "www.pkmeta.net":
-            return redirect(f"https://pkmeta.net{request.full_path.rstrip('?')}", code=301)
-
-        if not request.is_secure:
-            return redirect(f"https://pkmeta.net{request.full_path.rstrip('?')}", code=301)
+        canonical_url = f"{PUBLIC_BASE_URL}{request.full_path.rstrip('?')}"
+        if host != CANONICAL_HOST or not request.is_secure:
+            return redirect(canonical_url, code=301)
 
         return None
 
     @app.after_request
     def add_security_headers(resp: Response):
         host = (request.host.split(":", 1)[0] or "").lower()
-        if host == "pkmeta.net" and request.is_secure:
+        if host == CANONICAL_HOST and request.is_secure:
             resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
         return resp
 
@@ -1540,7 +1552,7 @@ def make_app(
             [
                 "User-agent: *",
                 "Allow: /",
-                "Sitemap: https://pkmeta.net/sitemap.xml",
+                f"Sitemap: {PUBLIC_BASE_URL}/sitemap.xml",
             ]
         )
         return Response(body + "\n", mimetype="text/plain")

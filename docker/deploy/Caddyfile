@@ -1,4 +1,4 @@
-pkmeta.net, www.pkmeta.net {
+pokemonchampionsmeta.net, www.pokemonchampionsmeta.net, pkmeta.net, www.pkmeta.net {
     encode zstd gzip
     reverse_proxy pkmeta-net:8000
 }

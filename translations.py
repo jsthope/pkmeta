@@ -15,43 +15,43 @@ LANG_TO_OG_LOCALE: dict[str, str] = {
 
 SEO_COPY: dict[str, dict[str, str]] = {
     "en": {
-        "title": "pkmeta.net - Pokemon Meta, VGC/PvP Stats & Win Rate",
-        "description": "pkmeta.net: competitive Pokemon and Smogon stats for meta analysis, win rate, usage, synergies, counters, and Elo filters.",
+        "title": "Pkmeta - Pokemon Meta, VGC/PvP Stats & Win Rate",
+        "description": "Pkmeta: competitive Pokemon and Smogon stats for meta analysis, win rate, usage, synergies, counters, and Elo filters.",
         "keywords": "pkmeta, pokemon, smogon, pokemon meta, meta pokemon, pokemon strategy, best pokemon, pvp, vgc, winrate, pokemon stats",
     },
     "fr": {
-        "title": "pkmeta.net - Meta Pokemon, Stats VGC/PvP et Taux de Victoire",
-        "description": "pkmeta.net: statistiques Pokemon et Smogon competitives pour analyser la meta, le taux de victoire, l'usage, les synergies, les contres et l'Elo.",
+        "title": "Pkmeta - Meta Pokemon, Stats VGC/PvP et Taux de Victoire",
+        "description": "Pkmeta: statistiques Pokemon et Smogon competitives pour analyser la meta, le taux de victoire, l'usage, les synergies, les contres et l'Elo.",
         "keywords": "pkmeta, pokemon, smogon, meta pokemon, strategie pokemon, pvp, vgc, taux de victoire, statistiques pokemon",
     },
     "de": {
-        "title": "pkmeta.net - Pokemon-Meta, VGC/PvP-Stats und Winrate",
-        "description": "pkmeta.net: kompetitive Pokemon- und Smogon-Statistiken fur Meta-Analyse, Winrate, Usage, Synergien, Counter und Elo-Filter.",
+        "title": "Pkmeta - Pokemon-Meta, VGC/PvP-Stats und Winrate",
+        "description": "Pkmeta: kompetitive Pokemon- und Smogon-Statistiken fur Meta-Analyse, Winrate, Usage, Synergien, Counter und Elo-Filter.",
         "keywords": "pkmeta, pokemon, smogon, pokemon meta, pokemon strategie, pvp, vgc, winrate, pokemon stats",
     },
     "es": {
-        "title": "pkmeta.net - Meta Pokemon, Estadisticas VGC/PvP y Winrate",
-        "description": "pkmeta.net: estadisticas competitivas de Pokemon y Smogon para analizar la meta, winrate, uso, sinergias, counters y filtros Elo.",
+        "title": "Pkmeta - Meta Pokemon, Estadisticas VGC/PvP y Winrate",
+        "description": "Pkmeta: estadisticas competitivas de Pokemon y Smogon para analizar la meta, winrate, uso, sinergias, counters y filtros Elo.",
         "keywords": "pkmeta, pokemon, smogon, meta pokemon, estrategia pokemon, pvp, vgc, winrate, estadisticas pokemon",
     },
     "it": {
-        "title": "pkmeta.net - Meta Pokemon, Statistiche VGC/PvP e Winrate",
-        "description": "pkmeta.net: statistiche competitive Pokemon e Smogon per analisi meta, winrate, uso, sinergie, counter e filtri Elo.",
+        "title": "Pkmeta - Meta Pokemon, Statistiche VGC/PvP e Winrate",
+        "description": "Pkmeta: statistiche competitive Pokemon e Smogon per analisi meta, winrate, uso, sinergie, counter e filtri Elo.",
         "keywords": "pkmeta, pokemon, smogon, meta pokemon, strategia pokemon, pvp, vgc, winrate, statistiche pokemon",
     },
     "ja": {
-        "title": "pkmeta.net - Pokemon Meta, VGC/PvP Stats and Win Rate",
-        "description": "pkmeta.net: PokemonとSmogonの対戦統計。メタ分析、勝率、使用率、相性、対策、Eloフィルターを確認できます。",
+        "title": "Pkmeta - Pokemon Meta, VGC/PvP Stats and Win Rate",
+        "description": "Pkmeta: PokemonとSmogonの対戦統計。メタ分析、勝率、使用率、相性、対策、Eloフィルターを確認できます。",
         "keywords": "pkmeta, pokemon, smogon, meta, pvp, vgc, winrate, usage, stats",
     },
     "ko": {
-        "title": "pkmeta.net - Pokemon Meta, VGC/PvP Stats and Win Rate",
-        "description": "pkmeta.net: 포켓몬과 Smogon 대전 통계. 메타 분석, 승률, 사용률, 시너지, 카운터, Elo 필터를 제공합니다.",
+        "title": "Pkmeta - Pokemon Meta, VGC/PvP Stats and Win Rate",
+        "description": "Pkmeta: 포켓몬과 Smogon 대전 통계. 메타 분석, 승률, 사용률, 시너지, 카운터, Elo 필터를 제공합니다.",
         "keywords": "pkmeta, pokemon, smogon, meta, pvp, vgc, winrate, usage, stats",
     },
     "zh-hans": {
-        "title": "pkmeta.net - Pokemon Meta, VGC/PvP Stats and Win Rate",
-        "description": "pkmeta.net: 宝可梦与 Smogon 对战数据平台，提供环境分析、胜率、使用率、联防与克制以及 Elo 筛选。",
+        "title": "Pkmeta - Pokemon Meta, VGC/PvP Stats and Win Rate",
+        "description": "Pkmeta: 宝可梦与 Smogon 对战数据平台，提供环境分析、胜率、使用率、联防与克制以及 Elo 筛选。",
         "keywords": "pkmeta, pokemon, smogon, meta, pvp, vgc, winrate, usage, stats",
     },
 }

@@ -9,6 +9,9 @@ services:
       - PKMETA_DB=/app/stats.sqlite
       - PKMETA_ATTACKS_DB=/app/attacks.sqlite
       - PKMETA_TEAMS_DB=/app/teams.sqlite
+      - PKMETA_CANONICAL_HOST=pokemonchampionsmeta.net
+      - PKMETA_SECONDARY_HOSTS=pkmeta.net,www.pkmeta.net,www.pokemonchampionsmeta.net
+      - PKMETA_SITE_BRAND=Pkmeta
     volumes:
       - ../../stats.sqlite:/app/stats.sqlite:ro
       - ../../attacks.sqlite:/app/attacks.sqlite:ro

@@ -12,7 +12,7 @@
   <link rel="alternate" hreflang="{{ alt.lang }}" href="{{ alt.href }}"/>
   {% endfor %}
   <meta property="og:type" content="website"/>
-  <meta property="og:site_name" content="pkmeta.net"/>
+  <meta property="og:site_name" content="{{ seo.site_name }}"/>
   <meta property="og:locale" content="{{ seo.og_locale }}"/>
   <meta property="og:title" content="{{ seo.title }}"/>
   <meta property="og:description" content="{{ seo.description }}"/>
@@ -33,7 +33,7 @@
 <body>
   <main class="page">
     <header class="top">
-      <h1><img class="brandMark" src="/static/pkmeta-mark.svg" alt=""/>Pkmeta <span>- Pokemon Stats from Showdown</span></h1>
+      <h1><img class="brandMark" src="/static/pkmeta-mark.svg" alt=""/>Pkmeta</h1>
       <div class="topRight">
         <div class="langSelectWrap">
           <select id="lang_select" aria-label="Language selector">

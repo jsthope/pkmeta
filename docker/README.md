@@ -17,4 +17,4 @@ The app mounts `stats.sqlite`, `attacks.sqlite`, and `teams.sqlite` into the con
 docker compose -f docker/deploy/docker-compose.yml up -d --build
 ```
 
-DNS must point `pkmeta.net` and `www.pkmeta.net` to the server for automatic TLS.
+DNS must point `pokemonchampionsmeta.net`, `www.pokemonchampionsmeta.net`, `pkmeta.net`, and `www.pkmeta.net` to the server for automatic TLS.
