@@ -739,6 +739,7 @@ function setTypeFilter(typeName) {
 
 function renderTypeButtons(types) {
   const wrap = el("type_filter_wrap");
+  const visibleTypes = sanitizeTypes(types);
   wrap.innerHTML = "";
 
   const mkBtn = (label, typeName) => {
@@ -766,7 +767,7 @@ function renderTypeButtons(types) {
   };
 
   wrap.appendChild(mkBtn(t("allTypes"), ""));
-  for (const t of types || []) {
+  for (const t of visibleTypes) {
     wrap.appendChild(mkBtn(t, t));
   }
   updateTypeButtonsUI();
@@ -1196,7 +1197,7 @@ function hydrateInitialState() {
   updateEloUI();
 
   const cacheKey = `${INITIAL_STATE.default_format}|${INITIAL_STATE.elo_min}|${INITIAL_STATE.elo_max}`;
-  const cachedTypes = Array.isArray(INITIAL_STATE.types) ? INITIAL_STATE.types : [];
+  const cachedTypes = sanitizeTypes(INITIAL_STATE.types);
   typeOptionsCache.pokemon = { key: cacheKey, types: cachedTypes };
   typeOptionsCache.attacks = { key: cacheKey, types: cachedTypes };
   typeOptionsCache.teams = { key: cacheKey, types: cachedTypes };
