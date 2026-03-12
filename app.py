@@ -702,6 +702,10 @@ def _home_pokemon_rows(
             "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
             (formatid, elo_min, elo_max),
         ).fetchone()
+        denom_row = conn.execute(
+            "SELECT COALESCE(SUM(games),0) AS s FROM pokemon_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
+            (formatid, elo_min, elo_max),
+        ).fetchone()
         rows = conn.execute(
             """
             SELECT
@@ -729,9 +733,8 @@ def _home_pokemon_rows(
         conn.close()
 
     matches = int(matches_row["m"]) if matches_row else 0
-    total_teams = matches * 2
-    total_teams = matches * 2
-    denom = max(1, 2 * matches)
+    total_games_sum = int(denom_row["s"]) if denom_row else 0
+    denom = max(1, total_games_sum)
     poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
     localized_name_map = load_pokemon_localized_name_map(lang)
 
@@ -1820,7 +1823,7 @@ def make_app(
             sum_elo = int(r["sum_elo"])
 
             winrate = wins / games if games else 0.0
-            denom = max(1, 2 * matches)
+            denom = max(1, total_games_sum)
             popularity = games / denom
 
             avg_elo = (sum_elo / games) if games else 0.0

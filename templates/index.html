@@ -25,7 +25,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png"/>
   <link rel="shortcut icon" href="/static/favicon.ico"/>
   <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon-180.png"/>
-  <link rel="stylesheet" href="/static/style.css?v=20260312p">
+  <link rel="stylesheet" href="/static/style.css?v=20260312q">
   <script type="application/ld+json">
   {{ seo.json_ld | tojson }}
   </script>
@@ -1825,13 +1825,16 @@ function timelineOverlayCardHtml(points) {
   const popularity = points.map(point => point.popularity);
   const winrate = points.map(point => point.winrate);
 
-  const domain = computeTimelineDomain([...popularity, ...winrate], {
-    startAtZero: true,
+  const popDomain = computeTimelineDomain(popularity, {
     minClamp: 0,
     maxClamp: 1,
   });
-  const popGeo = buildTimelineGeometry(popularity, domain);
-  const winGeo = buildTimelineGeometry(winrate, domain);
+  const winDomain = computeTimelineDomain(winrate, {
+    minClamp: 0,
+    maxClamp: 1,
+  });
+  const popGeo = buildTimelineGeometry(popularity, popDomain);
+  const winGeo = buildTimelineGeometry(winrate, winDomain);
   const firstDay = formatTimelineDay(days[0] || "");
   const lastDay = formatTimelineDay(days[days.length - 1] || "");
   const latestPop = popularity[popularity.length - 1] || 0;
@@ -1846,7 +1849,6 @@ function timelineOverlayCardHtml(points) {
   const gridHtml = popGeo.grid.map((row) => `
     <g class="timelineGridLine">
       <line x1="${popGeo.padX}" y1="${row.y.toFixed(2)}" x2="${popGeo.width - popGeo.padX}" y2="${row.y.toFixed(2)}"></line>
-      <text x="${popGeo.width - popGeo.padX - 4}" y="${(row.y - 4).toFixed(2)}" text-anchor="end">${escapeHtml(fmtPct(row.value))}</text>
     </g>
   `).join("");
   const volumeBarsHtml = popGeo.points.map((point, idx) => {
