@@ -868,6 +868,41 @@ tbody tr.clickable:hover{ background: #303030; }
   min-width: 0;
   flex: 1 1 auto;
 }
+
+.modalDetailControls{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.modalDetailControls select,
+.modalDetailControls input{
+  height: 34px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.modalDetailControls select{
+  min-width: 150px;
+  max-width: 240px;
+}
+
+.modalDetailControls input{
+  width: 88px;
+}
+
+.modalDetailEloWrap{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modalDetailSep{
+  color: var(--muted);
+  font-size: 12px;
+}
 .modalHeader b{
   font-size: 13px;
   color: rgba(255,255,255,.86);
@@ -1202,6 +1237,15 @@ tbody tr.clickable:hover{ background: #303030; }
   .modalHeaderMain{
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .modalDetailControls{
+    width: 100%;
+  }
+
+  .modalDetailControls select{
+    max-width: none;
+    width: 100%;
   }
 
   .detailSplitColumns{

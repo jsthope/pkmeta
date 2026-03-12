@@ -764,7 +764,7 @@ def _home_pokemon_rows(
                 "popularity": games / denom,
                 "avg_elo": (sum_elo / games) if games else 0.0,
                 "lead_rate": (leads / used) if used else 0.0,
-                "kd": kills / max(1, deaths),
+                "kd": wilson_lower_bound(wins, games),
                 "dmg_dealt": dmg_dealt,
                 "dmg_taken": dmg_taken,
                 "dmg_dealt_avg": (dmg_dealt / games) if games else 0.0,
@@ -1823,7 +1823,7 @@ def make_app(
 
             kills = int(r["kills"])
             deaths = int(r["deaths"])
-            kd = (kills / max(1, deaths))
+            kd = wilson_lower_bound(wins, games)
 
             dmg_dealt = int(r["dmg_dealt"]) / 100.0
             dmg_taken = int(r["dmg_taken"]) / 100.0
@@ -1962,7 +1962,7 @@ def make_app(
         popularity = games / max(1, 2 * matches)
         avg_elo = sum_elo / games if games else 0.0
         lead_rate = leads / used if used else 0.0
-        kd = kills / max(1, deaths)
+        kd = wilson_lower_bound(wins, games)
 
         day_cols = get_table_columns(conn, "pokemon_day")
         day_total_cols = get_table_columns(conn, "day_totals")
@@ -2087,6 +2087,20 @@ def make_app(
             ).fetchall()
             name_map = {str(r["key"]): str(r["name"]) for r in rows_nm if r["name"] is not None}
 
+        format_rows = conn.execute(
+            """
+            SELECT formatid, SUM(games) AS g
+            FROM pokemon_bucket
+            WHERE key=? AND formatid <> 'all'
+            GROUP BY formatid
+            ORDER BY g DESC, formatid ASC
+            """,
+            (key,),
+        ).fetchall()
+        available_formats = [str(r["formatid"]) for r in format_rows if r["formatid"] is not None]
+        if available_formats:
+            available_formats = ["all", *available_formats]
+
         moves_rows = conn.execute(
             "SELECT move, uses FROM pokemon_moves WHERE formatid=? AND key=? ORDER BY uses DESC",
             (formatid, key),
@@ -2128,6 +2142,7 @@ def make_app(
 
         conn.close()
         move_type_map = load_move_type_map(os.environ.get("PKMETA_MOVES_JSON", ""))
+        poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
         localized_name_map = load_pokemon_localized_name_map(lang)
         move_localized_map = load_move_localized_name_map(lang)
         item_localized_map = load_item_localized_name_map(lang)
@@ -2189,6 +2204,8 @@ def make_app(
                 "key": key,
                 "name": name,
                 "localized_name": localized_name,
+                "types": poke_type_map.get(key, []),
+                "available_formats": available_formats,
                 "games": games,
                 "wins": wins,
                 "popularity": popularity,

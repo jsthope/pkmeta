@@ -25,7 +25,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png"/>
   <link rel="shortcut icon" href="/static/favicon.ico"/>
   <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon-180.png"/>
-  <link rel="stylesheet" href="/static/style.css?v=20260312r">
+  <link rel="stylesheet" href="/static/style.css?v=20260312u">
   <script type="application/ld+json">
   {{ seo.json_ld | tojson }}
   </script>
@@ -136,7 +136,7 @@
               <th data-sort="games">Games<span class="sortInd"></span></th>
               <th data-sort="popularity">Popularity <span class="sortInd"></span></th>
               <th data-sort="lead_rate">Lead rate<span class="sortInd"></span></th>
-              <th data-sort="kd">K/D <span class="sortInd"></span></th>
+              <th data-sort="kd">Wilson LB <span class="sortInd"></span></th>
               <th data-sort="dmg_dealt">Dmg dealt %<span class="sortInd"></span></th>
               <th data-sort="dmg_taken">Dmg taken %<span class="sortInd"></span></th>
               <th data-sort="avg_elo">Avg ELO <span class="sortInd"></span></th>
@@ -166,7 +166,7 @@
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="games" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Games</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ fmt_int_lang(r.games, server_lang) }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="popularity" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Popularity</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ fmt_pct_lang(r.popularity, server_lang) }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="lead_rate" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Lead rate</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ fmt_pct_lang(r.lead_rate, server_lang) }}</b></span></div></td>
-              <td><div class="mobileStat mobileSortStat" data-mobile-sort="kd" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">K/D</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ fmt_1_nogroup_lang(r.kd, server_lang) }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="kd" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Wilson LB</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ fmt_pct_lang(r.kd, server_lang) }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="dmg_dealt" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Dmg dealt %</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ fmt_1_nogroup_lang(r.dmg_dealt_avg, server_lang) }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="dmg_taken" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Dmg taken %</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ fmt_1_nogroup_lang(r.dmg_taken_avg, server_lang) }}</b></span></div></td>
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ fmt_1_lang(r.avg_elo, server_lang) }}</b></span></div></td>
@@ -329,6 +329,7 @@
       <div class="modalHeader">
         <div class="modalHeaderMain">
           <b id="modalTitle">Details</b>
+          <div id="modalDetailControls" class="modalDetailControls"></div>
         </div>
         <button id="modalClose" class="btn">Close (Esc)</button>
       </div>
@@ -726,7 +727,7 @@ function applyI18n() {
     games: t("games"),
     popularity: t("popularity"),
     lead_rate: t("leadRate"),
-    kd: "K/D",
+    kd: t("wilsonLb"),
     dmg_dealt: t("dmgDealt"),
     dmg_taken: t("dmgTaken"),
     avg_elo: t("avgElo"),
@@ -766,7 +767,7 @@ function applyI18n() {
     if (ind && !th.contains(ind)) th.appendChild(ind);
   });
 
-  const pokemonMobileLabels = [t("winrate"), t("games"), t("popularity"), t("leadRate"), "K/D", t("dmgDealt"), t("dmgTaken"), t("avgElo")];
+  const pokemonMobileLabels = [t("winrate"), t("games"), t("popularity"), t("leadRate"), t("wilsonLb"), t("dmgDealt"), t("dmgTaken"), t("avgElo")];
   document.querySelectorAll("#rows tr").forEach(tr => {
     tr.querySelectorAll(".mobileStatLabel").forEach((labelEl, idx) => {
       if (pokemonMobileLabels[idx]) labelEl.textContent = pokemonMobileLabels[idx];
@@ -1323,6 +1324,7 @@ function openModal(title, bodyHtml) {
   el("modalBack").classList.remove("isTimelineMode");
   el("modalBody").classList.remove("timeline-mode");
   el("modalTitle").textContent = title || t("details");
+  el("modalDetailControls").innerHTML = "";
   el("modalBody").innerHTML = bodyHtml || "";
   el("modalBack").style.display = "flex";
 }
@@ -1330,6 +1332,8 @@ function closeModal() {
   el("modalBack").style.display = "none";
   el("modalBack").classList.remove("isTimelineMode");
   el("modalBody").classList.remove("timeline-mode");
+  el("modalDetailControls").innerHTML = "";
+  currentDetailState = null;
   document.documentElement.classList.remove("modal-open");
 }
 el("modalClose").addEventListener("click", closeModal);
@@ -1617,7 +1621,7 @@ async function loadList() {
     const td2 = document.createElement("td"); td2.innerHTML = sortableMobileStatHtml(t("games"), fmtInt(r.games), "games", "pokemon"); tr.appendChild(td2);
     const td3 = document.createElement("td"); td3.innerHTML = sortableMobileStatHtml(t("popularity"), fmtPct(r.popularity), "popularity", "pokemon"); tr.appendChild(td3);
     const td4 = document.createElement("td"); td4.innerHTML = sortableMobileStatHtml(t("leadRate"), fmtPct(r.lead_rate), "lead_rate", "pokemon"); tr.appendChild(td4);
-    const td5 = document.createElement("td"); td5.innerHTML = sortableMobileStatHtml("K/D", fmt1(r.kd), "kd", "pokemon"); tr.appendChild(td5);
+    const td5 = document.createElement("td"); td5.innerHTML = sortableMobileStatHtml(t("wilsonLb"), fmtPct(r.kd), "kd", "pokemon"); tr.appendChild(td5);
     const td6 = document.createElement("td"); td6.innerHTML = sortableMobileStatHtml(t("dmgDealt"), fmt1(r.dmg_dealt_avg), "dmg_dealt", "pokemon"); tr.appendChild(td6);
     const td7 = document.createElement("td"); td7.innerHTML = sortableMobileStatHtml(t("dmgTaken"), fmt1(r.dmg_taken_avg), "dmg_taken", "pokemon"); tr.appendChild(td7);
     const td8 = document.createElement("td"); td8.innerHTML = sortableMobileStatHtml(t("avgElo"), fmt1(r.avg_elo), "avg_elo", "pokemon"); tr.appendChild(td8);
@@ -1838,6 +1842,7 @@ function aggregateTimelinePoints(points, overallWinrate) {
   let bucketDays = Math.max(1, Math.ceil(spanDays / targetPoints));
   if (spanDays > 90) bucketDays = Math.max(bucketDays, 3);
   if (spanDays > 365) bucketDays = Math.max(bucketDays, 7);
+  bucketDays = Math.max(1, Math.round(bucketDays * 0.75));
 
   const priorRate = Math.max(0.05, Math.min(0.95, Number(overallWinrate) || 0.5));
   const priorGames = Math.max(6, Math.min(24, bucketDays * 2));
@@ -1892,7 +1897,8 @@ function timelineMetricHtml(label, value, kind) {
 }
 
 function timelineTooltipHtml(point) {
-  const winrateTone = (Number(point.winrate) || 0) >= 0.5 ? "isWinratePositive" : "isWinrateNegative";
+  const toneSource = Number.isFinite(Number(point.rawWinrate)) ? Number(point.rawWinrate) : Number(point.winrate);
+  const winrateTone = (toneSource || 0) >= 0.5 ? "isWinratePositive" : "isWinrateNegative";
   return `
     <div class="timelineTooltipDate">${escapeHtml(formatTimelineRange(point.first_day || point.day, point.last_day || point.day))}</div>
     <div class="timelineTooltipRow isPopularity"><span>${escapeHtml(t("popularity"))}</span><b>${escapeHtml(fmtPct(point.popularity || 0))}</b></div>
@@ -1912,6 +1918,7 @@ function timelineOverlayCardHtml(points) {
   const days = points.map(point => point.day);
   const popularity = points.map(point => point.popularity);
   const winrate = points.map(point => point.winrate);
+  const rawWinrate = points.map(point => Number.isFinite(Number(point.rawWinrate)) ? Number(point.rawWinrate) : (Number(point.winrate) || 0));
 
   const popDomain = computeTimelineDomain(popularity, {
     minClamp: 0,
@@ -1930,12 +1937,12 @@ function timelineOverlayCardHtml(points) {
   const latestWin = winrate[winrate.length - 1] || 0;
   const lastPopPoint = popGeo.points[popGeo.points.length - 1] || { x: 0, y: 0 };
   const lastWinPoint = winGeo.points[winGeo.points.length - 1] || { x: 0, y: 0 };
-  const winratePaths = buildThresholdLinePaths(winrate, winGeo.points, 0.5);
-  const lastWinTone = latestWin >= 0.5 ? "isWinratePositive" : "isWinrateNegative";
+  const winratePaths = buildThresholdLinePaths(rawWinrate, winGeo.points, 0.5);
+  const lastWinTone = (rawWinrate[rawWinrate.length - 1] || 0) >= 0.5 ? "isWinratePositive" : "isWinrateNegative";
   const thresholdY = (winDomain.max > winDomain.min && winDomain.min <= 0.5 && winDomain.max >= 0.5)
     ? (winGeo.padY + ((1 - ((0.5 - winDomain.min) / (winDomain.max - winDomain.min))) * (winGeo.height - (winGeo.padY * 2))))
     : null;
-  const winrateAreas = thresholdY !== null ? buildThresholdAreaPaths(winrate, winGeo.points, 0.5, thresholdY) : { positive: "", negative: "" };
+  const winrateAreas = thresholdY !== null ? buildThresholdAreaPaths(rawWinrate, winGeo.points, 0.5, thresholdY) : { positive: "", negative: "" };
   const games = points.map(point => Math.max(0, Number(point.games) || 0));
   const maxGames = Math.max(1, ...games);
   const barWidth = clampNumber((popGeo.width - (popGeo.padX * 2)) / Math.max(points.length, 1) * 0.62, 3, 14);
@@ -2041,7 +2048,7 @@ function bindTimelineOverlayInteractions(mount, interaction) {
     hoverPop.setAttribute('cy', popPoint.y.toFixed(2));
     hoverWin.setAttribute('cx', winPoint.x.toFixed(2));
     hoverWin.setAttribute('cy', winPoint.y.toFixed(2));
-    const winPositive = (Number(point.winrate) || 0) >= 0.5;
+    const winPositive = (Number.isFinite(Number(point.rawWinrate)) ? Number(point.rawWinrate) : (Number(point.winrate) || 0)) >= 0.5;
     hoverWin.classList.toggle('isWinratePositive', winPositive);
     hoverWin.classList.toggle('isWinrateNegative', !winPositive);
     hoverPop.style.opacity = '1';
@@ -2154,8 +2161,110 @@ function bindDetailTabs() {
   });
 }
 
-async function loadDetail(key, nameHint) {
-  const f = getFilters();
+let currentDetailState = null;
+
+async function fetchDetailEloBounds(formatid) {
+  const res = await fetch("/api/elo_bounds?formatid=" + encodeURIComponent(formatid));
+  if (!res.ok) throw new Error(`elo bounds ${res.status}`);
+  return await res.json();
+}
+
+async function renderDetailHeaderControls(state) {
+  const mount = el("modalDetailControls");
+  if (!mount || !state) return;
+
+  const formatid = String(state.formatid || el("formatid").value || "all");
+  const bounds = state.bounds || await fetchDetailEloBounds(formatid);
+  let eloMin = clampNumber(parseInt(state.elo_min || bounds.min, 10) || bounds.min, bounds.min, bounds.max);
+  let eloMax = clampNumber(parseInt(state.elo_max || bounds.max, 10) || bounds.max, bounds.min, bounds.max);
+  if (eloMin > eloMax) {
+    const swap = eloMin;
+    eloMin = eloMax;
+    eloMax = swap;
+  }
+
+  currentDetailState = {
+    ...currentDetailState,
+    ...state,
+    formatid,
+    elo_min: eloMin,
+    elo_max: eloMax,
+    bounds,
+  };
+
+  const allowedFormats = Array.isArray(currentDetailState.available_formats) && currentDetailState.available_formats.length
+    ? currentDetailState.available_formats
+    : Array.from(el("formatid").options).map(opt => opt.value);
+
+  const selectedFormat = allowedFormats.includes(formatid) ? formatid : (allowedFormats[0] || formatid);
+  currentDetailState.formatid = selectedFormat;
+
+  const formatLabelMap = Object.fromEntries(Array.from(el("formatid").options).map(opt => [opt.value, opt.textContent || opt.value]));
+  const formatOptions = allowedFormats.map((fmt) => {
+    const selected = fmt === selectedFormat ? " selected" : "";
+    return `<option value="${escapeHtml(fmt)}"${selected}>${escapeHtml(formatLabelMap[fmt] || fmt)}</option>`;
+  }).join("");
+
+  mount.innerHTML = `
+    <select id="detail_formatid" aria-label="${escapeHtml(t("format"))}">
+      ${formatOptions}
+    </select>
+    <div class="modalDetailEloWrap" aria-label="${escapeHtml(t("eloRange"))}">
+      <input id="detail_elo_min" type="number" min="${bounds.min}" max="${bounds.max}" step="${bounds.step || 100}" value="${eloMin}" aria-label="${escapeHtml(t("eloMeta"))} min" />
+      <span class="modalDetailSep">-</span>
+      <input id="detail_elo_max" type="number" min="${bounds.min}" max="${bounds.max}" step="${bounds.step || 100}" value="${eloMax}" aria-label="${escapeHtml(t("eloMeta"))} max" />
+    </div>
+  `;
+
+  const formatSel = el("detail_formatid");
+  const minInput = el("detail_elo_min");
+  const maxInput = el("detail_elo_max");
+  if (!formatSel || !minInput || !maxInput) return;
+
+  formatSel.addEventListener("change", async () => {
+    if (!currentDetailState) return;
+    try {
+      const nextBounds = await fetchDetailEloBounds(formatSel.value);
+      await loadDetail(currentDetailState.key, currentDetailState.nameHint, {
+        formatid: formatSel.value,
+        elo_min: nextBounds.min,
+        elo_max: nextBounds.max,
+        bounds: nextBounds,
+      });
+    } catch (_err) {}
+  });
+
+  const reloadForElo = async () => {
+    if (!currentDetailState) return;
+    const nextMin = clampNumber(parseInt(minInput.value || `${bounds.min}`, 10) || bounds.min, bounds.min, bounds.max);
+    const nextMax = clampNumber(parseInt(maxInput.value || `${bounds.max}`, 10) || bounds.max, bounds.min, bounds.max);
+    await loadDetail(currentDetailState.key, currentDetailState.nameHint, {
+      formatid: selectedFormat,
+      elo_min: Math.min(nextMin, nextMax),
+      elo_max: Math.max(nextMin, nextMax),
+      bounds,
+      available_formats: allowedFormats,
+    });
+  };
+
+  minInput.addEventListener("change", reloadForElo);
+  maxInput.addEventListener("change", reloadForElo);
+}
+
+async function loadDetail(key, nameHint, detailFilters = null) {
+  const pageFilters = getFilters();
+  const detailState = detailFilters || {
+    formatid: pageFilters.formatid,
+    elo_min: pageFilters.elo_min,
+    elo_max: pageFilters.elo_max,
+  };
+  const f = {
+    formatid: String(detailState.formatid || pageFilters.formatid || "all"),
+    elo_min: parseInt(detailState.elo_min ?? pageFilters.elo_min, 10) || 0,
+    elo_max: parseInt(detailState.elo_max ?? pageFilters.elo_max, 10) || 0,
+    bounds: detailState.bounds || null,
+  };
+  currentDetailState = { key, nameHint, ...f };
   const params = new URLSearchParams({
     formatid: f.formatid,
     elo_min: f.elo_min.toString(),
@@ -2180,6 +2289,9 @@ async function loadDetail(key, nameHint) {
       return;
     }
 
+    await renderDetailHeaderControls({ key, nameHint, ...f, available_formats: d.available_formats || [] });
+    el("modalTitle").textContent = `${t("details")} - ${d.localized_name || d.name || nameHint || t("tabPokemon")}`;
+
     const spriteList = preferAniFirst(d.sprite_urls || []);
 
     el("modalBody").innerHTML = `
@@ -2189,7 +2301,7 @@ async function loadDetail(key, nameHint) {
             <div class="heroRow">
               <img id="hero_img" class="heroSprite" data-srcs='${JSON.stringify(spriteList)}' src="${spriteList[0] || ""}" alt="" decoding="async"/>
               <div>
-                <div class="heroTitle">${escapeHtml(d.localized_name || d.name)}</div>
+                <div class="heroTitle pokeNameLine">${escapeHtml(d.localized_name || d.name)}${typeIconsHtml(d.types || [])}</div>
                 <div class="heroSub">
                   <span class="chip"><span>${t("games")}</span> <b>${fmtInt(d.games)}</b></span>
                   <span class="chip"><span>${t("popularity")}</span> <b>${fmtPct(d.popularity)}</b></span>
