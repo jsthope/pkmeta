@@ -1,5 +1,6 @@
 metamon-raw-replays/
-stats.sqlite
-teams.sqlite
-attacks.sqlite
+pokemon-showdown-replays/
+*.sqlite
+*.db
+tools/moves.json
 __pycache__/

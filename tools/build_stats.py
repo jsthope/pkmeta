@@ -10,7 +10,7 @@ import re
 import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timezone
 from typing import Any, DefaultDict, Dict, List, Optional, Tuple
 
 import pyarrow.parquet as pq
@@ -52,6 +52,18 @@ def clean_species(raw: str) -> str:
 def parse_day(uploadtime: Any) -> Optional[str]:
     if uploadtime is None:
         return None
+    if isinstance(uploadtime, datetime):
+        return uploadtime.date().isoformat()
+    if isinstance(uploadtime, date):
+        return uploadtime.isoformat()
+    if isinstance(uploadtime, (int, float)):
+        try:
+            ts = float(uploadtime)
+            if ts > 10_000_000_000:
+                ts /= 1000.0
+            return datetime.fromtimestamp(ts, tz=timezone.utc).date().isoformat()
+        except Exception:
+            return None
     if isinstance(uploadtime, str):
         s = uploadtime.strip()
         if not s:
@@ -61,6 +73,25 @@ def parse_day(uploadtime: Any) -> Optional[str]:
             return dt.date().isoformat()
         except Exception:
             return s[:10] if len(s) >= 10 else None
+    return None
+
+
+TIMESTAMP_COLUMN_CANDIDATES = (
+    "uploadtime",
+    "upload_time",
+    "uploaded_at",
+    "created_at",
+    "timestamp",
+    "battle_time",
+    "date",
+)
+
+
+def pick_timestamp_column(schema_names: list[str]) -> Optional[str]:
+    available = {str(name) for name in schema_names}
+    for candidate in TIMESTAMP_COLUMN_CANDIDATES:
+        if candidate in available:
+            return candidate
     return None
 
 def elo_bucketize(elo: int, step: int) -> int:
@@ -134,6 +165,7 @@ class ParsedMatch:
 def parse_log_one_pass(log: str) -> Optional[ParsedMatch]:
     players: Dict[str, str] = {}
     teams_species: Dict[str, List[str]] = {"p1": [], "p2": []}
+    saw_preview_poke = {"p1": False, "p2": False}
     winner_name: Optional[str] = None
 
     used = {"p1": defaultdict(int), "p2": defaultdict(int)}
@@ -170,6 +202,7 @@ def parse_log_one_pass(log: str) -> Optional[ParsedMatch]:
         elif tag == "poke" and len(parts) >= 4:
             side = parts[2]
             if side in ("p1", "p2"):
+                saw_preview_poke[side] = True
                 sp = clean_species(parts[3])
                 k, nm = canonicalize_species(sp)
                 if nm:
@@ -193,6 +226,9 @@ def parse_log_one_pass(log: str) -> Optional[ParsedMatch]:
 
             if not k:
                 continue
+
+            if not saw_preview_poke[side] and sp and sp not in teams_species[side]:
+                teams_species[side].append(sp)
 
             active_key[ip] = k
             used[side][k] = 1
@@ -416,20 +452,22 @@ def ensure_schema(conn: sqlite3.Connection, fast_sqlite: bool) -> None:
 
         CREATE TABLE IF NOT EXISTS pokemon_day (
           formatid TEXT NOT NULL,
+          elo_bucket INTEGER NOT NULL,
           day TEXT NOT NULL,
           key TEXT NOT NULL,
           name TEXT NOT NULL,
           games INTEGER NOT NULL,
           wins INTEGER NOT NULL,
-          PRIMARY KEY (formatid, day, key)
+          PRIMARY KEY (formatid, elo_bucket, day, key)
         ) WITHOUT ROWID;
 
         CREATE TABLE IF NOT EXISTS day_totals (
           formatid TEXT NOT NULL,
+          elo_bucket INTEGER NOT NULL,
           day TEXT NOT NULL,
           matches INTEGER NOT NULL,
           games_sum INTEGER NOT NULL,
-          PRIMARY KEY (formatid, day)
+          PRIMARY KEY (formatid, elo_bucket, day)
         ) WITHOUT ROWID;
 
         CREATE TABLE IF NOT EXISTS pokemon_moves (
@@ -464,7 +502,8 @@ def create_indexes(conn: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_pokemon_bucket_fmt_elo ON pokemon_bucket(formatid, elo_bucket);
         CREATE INDEX IF NOT EXISTS idx_pokemon_bucket_fmt_key ON pokemon_bucket(formatid, key);
-        CREATE INDEX IF NOT EXISTS idx_pokemon_day_fmt_key ON pokemon_day(formatid, key);
+        CREATE INDEX IF NOT EXISTS idx_pokemon_day_fmt_elo_key ON pokemon_day(formatid, elo_bucket, key, day);
+        CREATE INDEX IF NOT EXISTS idx_day_totals_fmt_elo_day ON day_totals(formatid, elo_bucket, day);
         CREATE INDEX IF NOT EXISTS idx_vs_bucket_fmt_a ON vs_bucket(formatid, a);
         """
     )
@@ -527,22 +566,22 @@ def rollup_all(conn: sqlite3.Connection) -> None:
     conn.execute("DELETE FROM pokemon_day WHERE formatid='all'")
     conn.execute(
         """
-        INSERT INTO pokemon_day(formatid, day, key, name, games, wins)
-        SELECT 'all', day, key, MIN(name), SUM(games), SUM(wins)
+        INSERT INTO pokemon_day(formatid, elo_bucket, day, key, name, games, wins)
+        SELECT 'all', elo_bucket, day, key, MIN(name), SUM(games), SUM(wins)
         FROM pokemon_day
         WHERE formatid <> 'all'
-        GROUP BY day, key
+        GROUP BY elo_bucket, day, key
         """
     )
 
     conn.execute("DELETE FROM day_totals WHERE formatid='all'")
     conn.execute(
         """
-        INSERT INTO day_totals(formatid, day, matches, games_sum)
-        SELECT 'all', day, SUM(matches), SUM(games_sum)
+        INSERT INTO day_totals(formatid, elo_bucket, day, matches, games_sum)
+        SELECT 'all', elo_bucket, day, SUM(matches), SUM(games_sum)
         FROM day_totals
         WHERE formatid <> 'all'
-        GROUP BY day
+        GROUP BY elo_bucket, day
         """
     )
 
@@ -586,8 +625,8 @@ def rollup_all(conn: sqlite3.Connection) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data_dir", default="metamon-raw-replays/data")
-    ap.add_argument("--glob", default="train-*.parquet")
+    ap.add_argument("--data_dir", default="pokemon-showdown-replays")
+    ap.add_argument("--glob", default="*.parquet")
     ap.add_argument("--out", default="stats.sqlite")
     ap.add_argument("--elo_step", type=int, default=100)
     ap.add_argument("--batch_size", type=int, default=8192)
@@ -625,8 +664,8 @@ def main() -> None:
     matches_cache: DefaultDict[Tuple[str, int], int] = defaultdict(int)
     mates_cache: DefaultDict[Tuple[str, int, str, str], List[int]] = defaultdict(lambda: [0, 0])
     vs_cache: DefaultDict[Tuple[str, int, str, str], List[int]] = defaultdict(lambda: [0, 0])
-    day_cache: DefaultDict[Tuple[str, str, str], List[int | str]] = defaultdict(lambda: ["", 0, 0])
-    day_tot_cache: DefaultDict[Tuple[str, str], List[int]] = defaultdict(lambda: [0, 0])
+    day_cache: DefaultDict[Tuple[str, int, str, str], List[int | str]] = defaultdict(lambda: ["", 0, 0])
+    day_tot_cache: DefaultDict[Tuple[str, int, str], List[int]] = defaultdict(lambda: [0, 0])
     moves_cache: DefaultDict[Tuple[str, str, str], int] = defaultdict(int)
     items_cache: DefaultDict[Tuple[str, str, str], int] = defaultdict(int)
     abilities_cache: DefaultDict[Tuple[str, str, str], int] = defaultdict(int)
@@ -716,25 +755,25 @@ def main() -> None:
 
         conn.executemany(
             """
-            INSERT INTO pokemon_day(formatid, day, key, name, games, wins)
-            VALUES (?,?,?,?,?,?)
-            ON CONFLICT(formatid, day, key) DO UPDATE SET
+            INSERT INTO pokemon_day(formatid, elo_bucket, day, key, name, games, wins)
+            VALUES (?,?,?,?,?,?,?)
+            ON CONFLICT(formatid, elo_bucket, day, key) DO UPDATE SET
               name=excluded.name,
               games=games+excluded.games,
               wins=wins+excluded.wins
             """,
-            [(fmt, day, key, v[0], v[1], v[2]) for (fmt, day, key), v in day_cache.items()],
+            [(fmt, bucket, day, key, v[0], v[1], v[2]) for (fmt, bucket, day, key), v in day_cache.items()],
         )
 
         conn.executemany(
             """
-            INSERT INTO day_totals(formatid, day, matches, games_sum)
-            VALUES (?,?,?,?)
-            ON CONFLICT(formatid, day) DO UPDATE SET
+            INSERT INTO day_totals(formatid, elo_bucket, day, matches, games_sum)
+            VALUES (?,?,?,?,?)
+            ON CONFLICT(formatid, elo_bucket, day) DO UPDATE SET
               matches=matches+excluded.matches,
               games_sum=games_sum+excluded.games_sum
             """,
-            [(fmt, day, v[0], v[1]) for (fmt, day), v in day_tot_cache.items()],
+            [(fmt, bucket, day, v[0], v[1]) for (fmt, bucket, day), v in day_tot_cache.items()],
         )
 
         conn.executemany(
@@ -783,11 +822,15 @@ def main() -> None:
 
     for fp in tqdm(files, desc="Parquet files"):
         pf = pq.ParquetFile(fp)
-        for batch in pf.iter_batches(columns=["log", "rating", "formatid", "uploadtime"], batch_size=args.batch_size):
+        timestamp_col = pick_timestamp_column(pf.schema.names)
+        columns = ["log", "rating", "formatid"]
+        if timestamp_col:
+            columns.append(timestamp_col)
+        for batch in pf.iter_batches(columns=columns, batch_size=args.batch_size):
             logs = batch.column(0).to_pylist()
             ratings = batch.column(1).to_pylist()
             fmts = batch.column(2).to_pylist()
-            upt = batch.column(3).to_pylist()
+            upt = batch.column(3).to_pylist() if timestamp_col else [None] * len(logs)
 
             for log, rating, formatid, uploadtime in zip(logs, ratings, fmts, upt):
                 if not isinstance(log, str) or not log:
@@ -809,8 +852,8 @@ def main() -> None:
                 matches_cache[(fmt, bucket)] += 1
 
                 if day:
-                    day_tot_cache[(fmt, day)][0] += 1
-                    day_tot_cache[(fmt, day)][1] += (len(pm.teams_species["p1"]) + len(pm.teams_species["p2"]))
+                    day_tot_cache[(fmt, bucket, day)][0] += 1
+                    day_tot_cache[(fmt, bucket, day)][1] += (len(pm.teams_species["p1"]) + len(pm.teams_species["p2"]))
 
                 for side in ("p1", "p2"):
                     won = 1 if side == pm.winner_side else 0
@@ -855,7 +898,7 @@ def main() -> None:
                         )
 
                         if day:
-                            dk = (fmt, day, k)
+                            dk = (fmt, bucket, day, k)
                             if not day_cache[dk][0]:
                                 day_cache[dk][0] = name
                             day_cache[dk][1] = int(day_cache[dk][1]) + bc

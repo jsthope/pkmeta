@@ -81,13 +81,11 @@ _ITEM_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
 _ABILITY_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
 _POKEMON_PICKER_OPTION_CACHE: Dict[str, List[Dict[str, Any]]] = {}
 DEFAULT_HOME_FORMAT = "gen9ou"
-DEFAULT_HOME_MIN_GAMES = 5000
-DEFAULT_HOME_LIMIT = 200
-DEFAULT_HOME_ATTACK_MIN_GAMES = 5000
-DEFAULT_HOME_TEAM_MIN_GAMES = 500
+DEFAULT_HOME_LIMIT = 50
+DEFAULT_MIN_USAGE_RATE = 0.005
 DEFAULT_HOME_TEAM_SIZE = 6
-DATASET_SOURCE_NAME = "metamon-raw-replays"
-DATASET_SOURCE_URL = "https://huggingface.co/datasets/jakegrigsby/metamon-raw-replays"
+DATASET_SOURCE_NAME = "pokemon-showdown-replays"
+DATASET_SOURCE_URL = "https://huggingface.co/datasets/HolidayOugi/pokemon-showdown-replays"
 SITE_BRAND = (os.environ.get("PKMETA_SITE_BRAND", "Pkmeta") or "Pkmeta").strip()
 CANONICAL_HOST = (os.environ.get("PKMETA_CANONICAL_HOST", "pokemonchampionsmeta.net") or "pokemonchampionsmeta.net").strip().lower()
 if CANONICAL_HOST.startswith("www."):
@@ -178,6 +176,13 @@ def get_conn(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
+
+def get_table_columns(conn: sqlite3.Connection, table_name: str) -> Set[str]:
+    try:
+        rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    except sqlite3.OperationalError:
+        return set()
+    return {str(row["name"]) for row in rows if row["name"] is not None}
 
 def clamp_int(x: Any, lo: int, hi: int) -> int:
     try:
@@ -542,6 +547,78 @@ def _human_int(x: int) -> str:
     return f"{int(x):,}".replace(",", "\u202f")
 
 
+def _recommended_min_games_from_matches(matches: int) -> int:
+    mm = max(0, int(matches))
+    if mm <= 0:
+        return 0
+    return int(math.ceil((2 * mm) * DEFAULT_MIN_USAGE_RATE))
+
+
+def _matches_for_window(db_path: str, formatid: str, elo_min: int, elo_max: int) -> int:
+    conn = get_conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
+            (formatid, elo_min, elo_max),
+        ).fetchone()
+    finally:
+        conn.close()
+    return int(row["m"]) if row else 0
+
+
+_DECIMAL_COMMA_LANGS = {"fr", "de", "es", "it"}
+
+
+def _decimal_separator_for_lang(lang: str) -> str:
+    return "," if _normalize_lang(lang) in _DECIMAL_COMMA_LANGS else "."
+
+
+def _format_number_for_lang(value: Any, lang: str, digits: int = 0, grouping: bool = True) -> str:
+    try:
+        num = float(value)
+    except Exception:
+        num = 0.0
+
+    if digits <= 0:
+        out = f"{int(round(num)):,}" if grouping else str(int(round(num)))
+        return out.replace(",", "\u202f") if grouping else out
+
+    out = f"{num:,.{digits}f}" if grouping else f"{num:.{digits}f}"
+    if "." in out:
+        whole, frac = out.split(".", 1)
+    else:
+        whole, frac = out, ""
+
+    if grouping:
+        whole = whole.replace(",", "\u202f")
+    else:
+        whole = whole.replace(",", "")
+
+    if not frac:
+        return whole
+    return f"{whole}{_decimal_separator_for_lang(lang)}{frac}"
+
+
+def fmt_int_lang(value: Any, lang: str) -> str:
+    return _format_number_for_lang(value, lang, digits=0, grouping=True)
+
+
+def fmt_1_lang(value: Any, lang: str) -> str:
+    return _format_number_for_lang(value, lang, digits=1, grouping=True)
+
+
+def fmt_1_nogroup_lang(value: Any, lang: str) -> str:
+    return _format_number_for_lang(value, lang, digits=1, grouping=False)
+
+
+def fmt_pct_lang(value: Any, lang: str) -> str:
+    try:
+        num = float(value) * 100.0
+    except Exception:
+        num = 0.0
+    return f"{_format_number_for_lang(num, lang, digits=1, grouping=False)}%"
+
+
 def _footer_copy_for_lang(lang: str) -> Dict[str, str]:
     lang_norm = _normalize_lang(lang)
     return FOOTER_COPY.get(lang_norm, FOOTER_COPY["en"])
@@ -815,6 +892,7 @@ def _attack_items_payload(
     move_localized_map = load_move_localized_name_map(lang_norm)
     matches = int(matches_row["m"]) if matches_row else 0
     total_teams = matches * 2
+    min_games_default = _recommended_min_games_from_matches(matches)
     items: List[Dict[str, Any]] = []
     for r in rows:
         games = int(r["games"])
@@ -873,7 +951,7 @@ def _attack_items_payload(
         "elo_min": elo_min,
         "elo_max": elo_max,
         "items": items[:limit],
-        "meta": {"matches": matches},
+        "meta": {"matches": matches, "min_games_default": min_games_default},
     }
 
 
@@ -882,11 +960,14 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
     formatid = _default_home_format(formats)
     elo_bounds = _elo_bounds_for_format(db_path, formatid)
     footer_copy = _footer_copy_for_lang(lang)
+    matches = _matches_for_window(db_path, formatid, elo_bounds["min"], elo_bounds["max"])
+    default_min_games = _recommended_min_games_from_matches(matches)
+
     pokemon = _home_pokemon_rows(
         db_path=db_path,
         formatid=formatid,
         lang=lang,
-        min_games=DEFAULT_HOME_MIN_GAMES,
+        min_games=default_min_games,
         limit=DEFAULT_HOME_LIMIT,
         elo_min=elo_bounds["min"],
         elo_max=elo_bounds["max"],
@@ -899,7 +980,7 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
         selected_types=set(),
         sort="uses",
         order="desc",
-        min_games=DEFAULT_HOME_ATTACK_MIN_GAMES,
+        min_games=default_min_games,
         limit=DEFAULT_HOME_LIMIT,
         elo_min=elo_bounds["min"],
         elo_max=elo_bounds["max"],
@@ -915,7 +996,7 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
         required_member_keys=[],
         sort="popularity",
         order="desc",
-            min_games=DEFAULT_HOME_TEAM_MIN_GAMES,
+            min_games=default_min_games,
             limit=DEFAULT_HOME_LIMIT,
             elo_min=elo_bounds["min"],
             elo_max=elo_bounds["max"],
@@ -937,8 +1018,9 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
         "elo_step": elo_bounds["step"],
         "matches": pokemon["matches"],
         "matches_display": _human_int(pokemon["matches"]),
-        "min_games": DEFAULT_HOME_MIN_GAMES,
-        "min_games_display": _human_int(DEFAULT_HOME_MIN_GAMES),
+        "min_games": default_min_games,
+        "min_games_display": _human_int(default_min_games),
+        "limit": DEFAULT_HOME_LIMIT,
         "rows": pokemon["items"],
         "attack_rows": attacks["items"],
         "team_rows": team_rows_by_size[str(DEFAULT_HOME_TEAM_SIZE)],
@@ -953,14 +1035,15 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
             "elo_step": elo_bounds["step"],
             "types": initial_types,
             "matches": pokemon["matches"],
-            "pokemon": {"min_games": DEFAULT_HOME_MIN_GAMES, "sort": "popularity", "order": "desc", "preloaded": True},
-            "attacks": {"min_games": DEFAULT_HOME_ATTACK_MIN_GAMES, "sort": "uses", "order": "desc", "preloaded": True},
+            "pokemon": {"min_games": default_min_games, "sort": "popularity", "order": "desc", "preloaded": True, "min_games_auto": True},
+            "attacks": {"min_games": default_min_games, "sort": "uses", "order": "desc", "preloaded": True, "min_games_auto": True},
             "teams": {
-                "min_games": DEFAULT_HOME_TEAM_MIN_GAMES,
+                "min_games": default_min_games,
                 "sort": "popularity",
                 "order": "desc",
                 "combo_size": DEFAULT_HOME_TEAM_SIZE,
                 "preloaded": True,
+                "min_games_auto": True,
                 "by_size": team_rows_by_size,
             },
             "pokemon_picker_options": _pokemon_picker_options(lang),
@@ -1196,6 +1279,7 @@ def _team_items_payload(
         conn.close()
 
     denom = max(1, 2 * matches)
+    min_games_default = _recommended_min_games_from_matches(matches)
 
     items: List[Dict[str, Any]] = []
     for r in rows:
@@ -1274,7 +1358,7 @@ def _team_items_payload(
         "elo_max": elo_max,
         "combo_size": combo_size,
         "items": items[:limit] if not fast_path else items,
-        "meta": {"matches": matches},
+        "meta": {"matches": matches, "min_games_default": min_games_default},
     }
 
 
@@ -1499,6 +1583,12 @@ def make_app(
 ) -> Flask:
     app = Flask(__name__)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+    app.jinja_env.globals.update(
+        fmt_int_lang=fmt_int_lang,
+        fmt_1_lang=fmt_1_lang,
+        fmt_1_nogroup_lang=fmt_1_nogroup_lang,
+        fmt_pct_lang=fmt_pct_lang,
+    )
 
     @app.before_request
     def force_https_and_canonical_host():
@@ -1670,8 +1760,7 @@ def make_app(
         selected_types = _parse_types_param(request.args.get("types", "") or "")
         sort = (request.args.get("sort", "winrate") or "winrate").strip()
         order = (request.args.get("order", "desc") or "desc").strip().lower()
-        min_games = clamp_int(request.args.get("min_games", 5000), 0, 10_000_000)
-        limit = clamp_int(request.args.get("limit", 200), 10, 2000)
+        limit = clamp_int(request.args.get("limit", DEFAULT_HOME_LIMIT), 10, 2000)
 
         elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
         elo_max = clamp_int(request.args.get("elo_max", 10000), 0, 10000)
@@ -1693,6 +1782,8 @@ def make_app(
             (formatid, elo_min, elo_max),
         ).fetchone()
         matches = int(matches_row["m"]) if matches_row else 0
+        min_games_default = _recommended_min_games_from_matches(matches)
+        min_games = clamp_int(request.args.get("min_games", min_games_default), 0, 10_000_000)
 
         rows = conn.execute(
             """
@@ -1810,7 +1901,7 @@ def make_app(
                 "elo_min": elo_min,
                 "elo_max": elo_max,
                 "items": items[:limit],
-                "meta": {"matches": matches, "total_games_sum": total_games_sum},
+                "meta": {"matches": matches, "total_games_sum": total_games_sum, "min_games_default": min_games_default},
             }
         )
 
@@ -1828,10 +1919,15 @@ def make_app(
         if elo_min > elo_max:
             elo_min, elo_max = elo_max, elo_min
 
-        min_pair_games = clamp_int(request.args.get("min_pair_games", min_pair_games_default), 0, 10_000_000)
-        min_vs_games = clamp_int(request.args.get("min_vs_games", min_vs_games_default), 0, 10_000_000)
-
         conn = get_conn(db_path)
+        matches_row = conn.execute(
+            "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
+            (formatid, elo_min, elo_max),
+        ).fetchone()
+        matches = int(matches_row["m"]) if matches_row else 0
+        min_synergy_games_default = _recommended_min_games_from_matches(matches)
+        min_pair_games = clamp_int(request.args.get("min_pair_games", min_synergy_games_default), 0, 10_000_000)
+        min_vs_games = clamp_int(request.args.get("min_vs_games", min_synergy_games_default), 0, 10_000_000)
 
         base = conn.execute(
             """
@@ -1872,24 +1968,59 @@ def make_app(
         lead_rate = leads / used if used else 0.0
         kd = kills / max(1, deaths)
 
-        ser_rows = conn.execute(
-            """
-            SELECT d.day AS day, d.games AS g, t.games_sum AS tot
-            FROM pokemon_day d
-            JOIN day_totals t ON (t.formatid=d.formatid AND t.day=d.day)
-            WHERE d.formatid=? AND d.key=?
-            ORDER BY d.day ASC
-            """,
-            (formatid, key),
-        ).fetchall()
+        day_cols = get_table_columns(conn, "pokemon_day")
+        day_total_cols = get_table_columns(conn, "day_totals")
+        ser_rows: List[sqlite3.Row] = []
+        try:
+            if "elo_bucket" in day_cols and "elo_bucket" in day_total_cols:
+                ser_rows = conn.execute(
+                    """
+                    SELECT d.day AS day, SUM(d.games) AS g, SUM(d.wins) AS w, SUM(t.games_sum) AS tot
+                    FROM pokemon_day d
+                    JOIN day_totals t
+                      ON (t.formatid=d.formatid AND t.elo_bucket=d.elo_bucket AND t.day=d.day)
+                    WHERE d.formatid=? AND d.key=? AND d.elo_bucket BETWEEN ? AND ?
+                    GROUP BY d.day
+                    ORDER BY d.day ASC
+                    """,
+                    (formatid, key, elo_min, elo_max),
+                ).fetchall()
+            else:
+                ser_rows = conn.execute(
+                    """
+                    SELECT d.day AS day, SUM(d.games) AS g, SUM(d.wins) AS w, SUM(t.games_sum) AS tot
+                    FROM pokemon_day d
+                    JOIN day_totals t ON (t.formatid=d.formatid AND t.day=d.day)
+                    WHERE d.formatid=? AND d.key=?
+                    GROUP BY d.day
+                    ORDER BY d.day ASC
+                    """,
+                    (formatid, key),
+                ).fetchall()
+        except sqlite3.OperationalError:
+            ser_rows = []
 
         days: List[str] = []
         pops: List[float] = []
+        day_winrates: List[float] = []
+        day_games: List[int] = []
+        day_wins: List[int] = []
+        day_totals: List[int] = []
         for r in ser_rows:
-            tot = int(r["tot"]) or 1
-            g = int(r["g"])
+            tot = int(r["tot"] or 0)
+            g = int(r["g"] or 0)
+            w = int(r["w"] or 0)
+            if g <= 0 or tot <= 0:
+                continue
             days.append(str(r["day"]))
+            day_games.append(g)
+            day_wins.append(w)
+            day_totals.append(tot)
             pops.append(g / tot)
+            day_winrates.append(w / g)
+
+        first_day = days[0] if days else ""
+        last_day = days[-1] if days else ""
 
         mate_rows = conn.execute(
             """
@@ -1961,12 +2092,12 @@ def make_app(
             name_map = {str(r["key"]): str(r["name"]) for r in rows_nm if r["name"] is not None}
 
         moves_rows = conn.execute(
-            "SELECT move, uses FROM pokemon_moves WHERE formatid=? AND key=? ORDER BY uses DESC LIMIT 15",
+            "SELECT move, uses FROM pokemon_moves WHERE formatid=? AND key=? ORDER BY uses DESC",
             (formatid, key),
         ).fetchall()
 
         items_rows = conn.execute(
-            "SELECT item, uses FROM pokemon_items WHERE formatid=? AND key=? ORDER BY uses DESC LIMIT 15",
+            "SELECT item, uses FROM pokemon_items WHERE formatid=? AND key=? ORDER BY uses DESC",
             (formatid, key),
         ).fetchall()
 
@@ -2073,7 +2204,17 @@ def make_app(
                 "dmg_dealt": dmg_dealt,
                 "dmg_taken": dmg_taken,
                 "sprite_urls": sprite_urls(key, name),
-                "series": {"days": days, "popularity": pops},
+                "series": {
+                    "days": days,
+                    "games": day_games,
+                    "wins": day_wins,
+                    "totals": day_totals,
+                    "popularity": pops,
+                    "winrate": day_winrates,
+                    "overall_winrate": winrate,
+                    "first_day": first_day,
+                    "last_day": last_day,
+                },
                 "mates": mates_payload,
                 "counters": counters_payload,
                 "moves": [
@@ -2097,6 +2238,7 @@ def make_app(
                 "base_stats": base_stats,
                 "min_pair_games": min_pair_games,
                 "min_vs_games": min_vs_games,
+                "min_synergy_games_default": min_synergy_games_default,
             }
         )
 
@@ -2138,8 +2280,7 @@ def make_app(
         selected_types = _parse_types_param(request.args.get("types", "") or request.args.get("type", "") or "")
         sort = (request.args.get("sort", "uses") or "uses").strip().lower()
         order = (request.args.get("order", "desc") or "desc").strip().lower()
-        min_games = clamp_int(request.args.get("min_games", 2000), 0, 10_000_000)
-        limit = clamp_int(request.args.get("limit", 200), 10, 2000)
+        limit = clamp_int(request.args.get("limit", DEFAULT_HOME_LIMIT), 10, 2000)
 
         elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
         elo_max = clamp_int(request.args.get("elo_max", 10000), 0, 10000)
@@ -2152,6 +2293,9 @@ def make_app(
                 "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
                 (formatid, elo_min, elo_max),
             ).fetchone()
+            matches = int(matches_row["m"]) if matches_row else 0
+            min_games_default = _recommended_min_games_from_matches(matches)
+            min_games = clamp_int(request.args.get("min_games", min_games_default), 0, 10_000_000)
 
             q_sql = """
             SELECT
@@ -2189,7 +2333,6 @@ def make_app(
         conn.close()
         move_localized_map = load_move_localized_name_map(lang)
 
-        matches = int(matches_row["m"]) if matches_row else 0
         total_teams = matches * 2
         items: List[Dict[str, Any]] = []
         for r in rows:
@@ -2250,7 +2393,7 @@ def make_app(
                 "elo_min": elo_min,
                 "elo_max": elo_max,
                 "items": items[:limit],
-                "meta": {"matches": matches},
+                "meta": {"matches": matches, "min_games_default": min_games_default},
             }
         )
 
@@ -2262,14 +2405,17 @@ def make_app(
         selected_types = _parse_types_param(request.args.get("types", "") or "")
         sort = (request.args.get("sort", "popularity") or "popularity").strip().lower()
         order = (request.args.get("order", "desc") or "desc").strip().lower()
-        min_games = clamp_int(request.args.get("min_games", 500), 0, 10_000_000)
-        limit = clamp_int(request.args.get("limit", 200), 10, 2000)
+        limit = clamp_int(request.args.get("limit", DEFAULT_HOME_LIMIT), 10, 2000)
         combo_size = clamp_int(request.args.get("combo_size", 6), 2, 6)
 
         elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
         elo_max = clamp_int(request.args.get("elo_max", 10000), 0, 10000)
         if elo_min > elo_max:
             elo_min, elo_max = elo_max, elo_min
+
+        matches = _matches_for_window(db_path, formatid, elo_min, elo_max)
+        min_games_default = _recommended_min_games_from_matches(matches)
+        min_games = clamp_int(request.args.get("min_games", min_games_default), 0, 10_000_000)
 
         return jsonify(
             _team_items_payload(

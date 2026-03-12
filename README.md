@@ -6,9 +6,9 @@ Various statistics on the current showdown meta :)
 
 Replay data used to build the database comes from:
 
-- https://huggingface.co/datasets/jakegrigsby/metamon-raw-replays
+- https://huggingface.co/datasets/HolidayOugi/pokemon-showdown-replays
 
-Use the parquet files from that dataset (default path: `metamon-raw-replays/data`) to generate `stats.sqlite` and `attacks.sqlite`.
+Use the parquet files from that dataset (default path: `pokemon-showdown-replays`) to generate `stats.sqlite` and `attacks.sqlite`.
 
 ## Build the database
 

@@ -148,8 +148,8 @@ def rollup_all(conn: sqlite3.Connection) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data_dir", default="metamon-raw-replays/data")
-    ap.add_argument("--glob", default="train-*.parquet")
+    ap.add_argument("--data_dir", default="pokemon-showdown-replays")
+    ap.add_argument("--glob", default="*.parquet")
     ap.add_argument("--out", default="teams.sqlite")
     ap.add_argument("--elo_step", type=int, default=100)
     ap.add_argument("--min_size", type=int, default=2)

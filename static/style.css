@@ -825,8 +825,13 @@ tbody tr.clickable:hover{ background: #303030; }
   -webkit-backdrop-filter: none !important;
 }
 
+.modalBack.isTimelineMode{
+  align-items: flex-start;
+  overflow-y: auto;
+}
+
 .modal{
-  width: min(1200px, 100%);
+  width: min(1460px, 100%);
   max-height: min(90vh, 100%);
   overflow: hidden;
   background: #262626;
@@ -839,6 +844,11 @@ tbody tr.clickable:hover{ background: #303030; }
   contain: layout paint;
 }
 
+.modalBack.isTimelineMode .modal{
+  margin: 18px 0;
+  max-height: none;
+}
+
 .modalHeader{
   position: sticky;
   top: 0;
@@ -849,18 +859,34 @@ tbody tr.clickable:hover{ background: #303030; }
   display:flex;
   align-items:center;
   justify-content: space-between;
+  gap: 12px;
+}
+.modalHeaderMain{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .modalHeader b{
   font-size: 13px;
   color: rgba(255,255,255,.86);
+  flex: 0 0 auto;
 }
 
 .modalBody{
   padding: 14px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   max-height: calc(min(90vh, 100vh) - 58px);
   -webkit-overflow-scrolling: touch;
   contain: content;
+}
+
+.modalBody.timeline-mode{
+  overflow: visible;
+  max-height: none;
+  contain: layout paint;
 }
 
 .detailGrid{
@@ -869,6 +895,427 @@ tbody tr.clickable:hover{ background: #303030; }
   gap: 14px;
 }
 @media (max-width: 980px){ .detailGrid{ grid-template-columns: 1fr; } }
+
+.detailHeaderBand{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 0;
+}
+
+.detailHeaderMain{
+  display: grid;
+  gap: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.detailTabsRow{
+  display: block;
+}
+
+.detailTabs{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 0;
+  flex: 1 1 auto;
+}
+
+.detailHeaderArt{
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.detailTabsSprite,
+.timelineSummarySprite{
+  width: 116px;
+  height: 116px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.16);
+}
+
+.detailTabBtn{
+  min-width: 120px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: #303030;
+  color: rgba(255,255,255,.76);
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+
+.detailTabBtn:hover{
+  background: #363636;
+}
+
+.detailTabBtn.isActive{
+  background: #3d3d3d;
+  color: rgba(255,255,255,.94);
+  border-color: rgba(255,255,255,.20);
+}
+
+.detailPanel{ display: none; }
+.detailPanel.isActive{ display: block; min-width: 0; }
+
+.timelineSummary{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 0;
+  flex: 1 1 auto;
+}
+
+.timelineHeaderSummary{
+  display: flex;
+  padding: 10px 0 12px;
+}
+
+.detailSubsectionBox{
+  min-width: 0;
+}
+
+.detailBaseStatsBox{
+  margin-top: 12px;
+}
+
+.detailSplitColumns{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  min-width: 0;
+}
+
+.detailMediaGrid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.detailMediaGrid > *{
+  min-width: 0;
+}
+
+.detailListCard{
+  min-width: 0;
+}
+
+.detailListColumn{
+  min-width: 0;
+}
+
+.modalBody.timeline-mode .detailHeaderBand{
+  margin-bottom: 0;
+}
+
+.timelineCard{
+  padding: 12px;
+}
+
+.timelineCardOverlay{
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.timelineCardHead{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.timelineCardTitle{
+  margin: 0;
+  font-size: 14px;
+  color: rgba(255,255,255,.92);
+}
+
+.timelineBadges{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.timelineLegend{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.timelineLegendItem{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.12);
+  color: rgba(255,255,255,.82);
+  font-size: 12px;
+}
+
+.timelineLegendSwatch{
+  width: 22px;
+  height: 3px;
+  border-radius: 999px;
+  background: #4a8dff;
+  display: inline-block;
+}
+
+.timelineLegendSwatch.isPopularity{
+  background: #4a8dff;
+}
+
+.timelineLegendSwatch.isWinrate{
+  background: #42c978;
+}
+
+.timelineLegendSwatch.isGames{
+  height: 10px;
+  border-radius: 3px;
+  background: rgba(255,255,255,.22);
+}
+
+.timelineMetrics{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.timelineMetric{
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.12);
+}
+
+.timelineMetric span{
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.timelineMetric b{
+  font-size: 16px;
+  color: rgba(255,255,255,.94);
+}
+
+.timelineMetric.isPopularity{
+  box-shadow: inset 0 1px 0 rgba(74,141,255,.14);
+}
+
+.timelineMetric.isWinrate{
+  box-shadow: inset 0 1px 0 rgba(66,201,120,.14);
+}
+
+.timelineBadge{
+  display: grid;
+  gap: 2px;
+  min-width: 82px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.12);
+}
+
+.timelineBadge span{
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.timelineBadge b{
+  font-size: 15px;
+  color: rgba(255,255,255,.94);
+}
+
+.timelineChartFrame{
+  position: relative;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255,255,255,.03) 0%, rgba(0,0,0,.12) 100%);
+  padding: 12px;
+  overflow: visible;
+  width: 100%;
+  min-width: 0;
+}
+
+.timelineSvg{
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.timelineGridLine line{
+  stroke: rgba(255,255,255,.10);
+  stroke-dasharray: 4 6;
+}
+
+.timelineGridLine text{
+  fill: rgba(255,255,255,.44);
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.timelineAxis{
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  width: 100%;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.timelineEmpty{
+  color: var(--muted);
+}
+
+@media (max-width: 980px){
+  .timelineMetrics{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .detailHeaderBand{
+    flex-direction: column;
+  }
+
+  .modalHeader{
+    align-items: flex-start;
+  }
+
+  .modalHeaderMain{
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .detailSplitColumns{
+    grid-template-columns: 1fr;
+  }
+
+  .detailMediaGrid{
+    grid-template-columns: 1fr;
+  }
+
+  .detailHeaderArt{
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+.timelineSeriesLine{
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.timelineSeriesLine.isPopularity{
+  stroke: #4a8dff;
+}
+
+.timelineSeriesLine.isWinrate{
+  stroke: #42c978;
+  stroke-dasharray: 12 8;
+}
+
+.timelineSeriesDot{
+  stroke: #1f1f1f;
+  stroke-width: 2;
+}
+
+.timelineSeriesDot.isPopularity{
+  fill: #4a8dff;
+}
+
+.timelineSeriesDot.isWinrate{
+  fill: #42c978;
+}
+
+.timelineVolumeBar{
+  fill: rgba(255,255,255,.12);
+}
+
+.timelineHoverLine{
+  stroke: rgba(255,255,255,.24);
+  stroke-width: 2;
+  stroke-dasharray: 5 7;
+  opacity: 0;
+}
+
+.timelineHoverDot{
+  opacity: 0;
+  stroke: #1a1a1a;
+  stroke-width: 3;
+}
+
+.timelineTooltip{
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  min-width: 180px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(19,19,19,.94);
+  box-shadow: 0 18px 40px rgba(0,0,0,.30);
+  transform: translate(-50%, calc(-100% - 14px));
+  pointer-events: none;
+}
+
+.timelineTooltipDate{
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,.92);
+}
+
+.timelineTooltipRow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  font-size: 12px;
+}
+
+.timelineTooltipRow + .timelineTooltipRow{
+  margin-top: 6px;
+}
+
+.timelineTooltipRow span{
+  color: var(--muted);
+}
+
+.timelineTooltipRow b{
+  font-size: 13px;
+}
+
+.timelineTooltipRow.isPopularity b{
+  color: #9dd7ff;
+}
+
+.timelineTooltipRow.isWinrate b{
+  color: #9cf0be;
+}
+
+.timelineTooltipRow.isGames b{
+  color: rgba(255,255,255,.90);
+}
 
 .card{
   border-radius: 8px;
@@ -1367,6 +1814,36 @@ html.modal-open body{ overflow: hidden; }
 
   .minirow{
     gap: 10px;
+  }
+
+  .detailTabs{
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
+
+  .detailTabBtn{
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .timelineCardHead{
+    flex-direction: column;
+  }
+
+  .detailTabsSprite,
+  .timelineSummarySprite{
+    width: 88px;
+    height: 88px;
+  }
+
+  .timelineBadges,
+  .timelineLegend{
+    justify-content: flex-start;
+  }
+
+  .timelineMetrics{
+    grid-template-columns: 1fr;
   }
 
   .detailGrid[style*="margin-top: 14px"],

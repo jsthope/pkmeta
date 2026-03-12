@@ -12,14 +12,17 @@ import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, DefaultDict, Dict, Optional, Tuple
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 import pyarrow.parquet as pq
 from tqdm import tqdm
 
 
 _TOID_RE = re.compile(r"[^a-z0-9]+")
-MOVES_JSON_URL = "https://play.pokemonshowdown.com/data/moves.json"
+MOVES_JSON_URLS = (
+    "https://play.pokemonshowdown.com/data/moves.json",
+    "https://raw.githubusercontent.com/smogon/pokemon-showdown/master/data/moves.json",
+)
 
 
 def to_id(name: str) -> str:
@@ -44,8 +47,21 @@ def load_move_types(local_json_path: Optional[str] = None) -> Dict[str, Tuple[st
         with open(local_json_path, "r", encoding="utf-8") as f:
             raw = f.read()
     else:
-        req = urlopen(MOVES_JSON_URL, timeout=30)
-        raw = req.read().decode("utf-8")
+        raw = ""
+        last_error: Exception | None = None
+        for url in MOVES_JSON_URLS:
+            try:
+                req = Request(url, headers={"User-Agent": "pkmeta/1.0"})
+                with urlopen(req, timeout=30) as resp:
+                    raw = resp.read().decode("utf-8")
+                break
+            except Exception as exc:
+                last_error = exc
+                raw = ""
+        if not raw:
+            if last_error is not None:
+                raise last_error
+            raise RuntimeError("Unable to load moves.json")
     data = json.loads(raw)
     out: Dict[str, Tuple[str, str]] = {}
     for k, v in data.items():
@@ -221,8 +237,8 @@ def rollup_all(conn: sqlite3.Connection) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data_dir", default="metamon-raw-replays/data")
-    ap.add_argument("--glob", default="train-*.parquet")
+    ap.add_argument("--data_dir", default="pokemon-showdown-replays")
+    ap.add_argument("--glob", default="*.parquet")
     ap.add_argument("--out", default="attacks.sqlite")
     ap.add_argument("--elo_step", type=int, default=100)
     ap.add_argument("--batch_size", type=int, default=8192)
