@@ -25,7 +25,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png"/>
   <link rel="shortcut icon" href="/static/favicon.ico"/>
   <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon-180.png"/>
-  <link rel="stylesheet" href="/static/style.css?v=20260312q">
+  <link rel="stylesheet" href="/static/style.css?v=20260312r">
   <script type="application/ld+json">
   {{ seo.json_ld | tojson }}
   </script>
@@ -1726,6 +1726,93 @@ function buildTimelineGeometry(values, domain) {
   return { width, height, padX, padY, points, line, area, grid };
 }
 
+function buildThresholdLinePaths(values, points, threshold) {
+  if (!Array.isArray(values) || !Array.isArray(points) || values.length !== points.length || !points.length) {
+    return { positive: "", negative: "" };
+  }
+
+  const positive = [];
+  const negative = [];
+  const fmtPoint = (point, prefix) => `${prefix} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+  const bucketFor = (value) => ((Number(value) || 0) >= threshold ? positive : negative);
+
+  bucketFor(values[0]).push(fmtPoint(points[0], "M"));
+
+  for (let idx = 0; idx < points.length - 1; idx++) {
+    const p1 = points[idx];
+    const p2 = points[idx + 1];
+    const v1 = Number(values[idx]) || 0;
+    const v2 = Number(values[idx + 1]) || 0;
+    const sameSide = (v1 >= threshold) === (v2 >= threshold);
+
+    if (sameSide || v1 === v2) {
+      bucketFor(v1).push(fmtPoint(p2, "L"));
+      continue;
+    }
+
+    const ratio = (threshold - v1) / (v2 - v1);
+    const cross = {
+      x: p1.x + ((p2.x - p1.x) * ratio),
+      y: p1.y + ((p2.y - p1.y) * ratio),
+    };
+
+    bucketFor(v1).push(fmtPoint(cross, "L"));
+    bucketFor(v2).push(fmtPoint(cross, "M"));
+    bucketFor(v2).push(fmtPoint(p2, "L"));
+  }
+
+  return {
+    positive: positive.join(" "),
+    negative: negative.join(" "),
+  };
+}
+
+function buildThresholdAreaPaths(values, points, threshold, baselineY) {
+  if (!Array.isArray(values) || !Array.isArray(points) || values.length !== points.length || !points.length) {
+    return { positive: "", negative: "" };
+  }
+
+  const positive = [];
+  const negative = [];
+  const bucketFor = (value) => ((Number(value) || 0) >= threshold ? positive : negative);
+
+  let currentBucket = bucketFor(values[0]);
+  let currentPath = `M ${points[0].x.toFixed(2)} ${baselineY.toFixed(2)} L ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+
+  for (let idx = 0; idx < points.length - 1; idx++) {
+    const p1 = points[idx];
+    const p2 = points[idx + 1];
+    const v1 = Number(values[idx]) || 0;
+    const v2 = Number(values[idx + 1]) || 0;
+    const sameSide = (v1 >= threshold) === (v2 >= threshold);
+
+    if (sameSide || v1 === v2) {
+      currentPath += ` L ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+      continue;
+    }
+
+    const ratio = (threshold - v1) / (v2 - v1);
+    const cross = {
+      x: p1.x + ((p2.x - p1.x) * ratio),
+      y: p1.y + ((p2.y - p1.y) * ratio),
+    };
+
+    currentPath += ` L ${cross.x.toFixed(2)} ${cross.y.toFixed(2)} L ${cross.x.toFixed(2)} ${baselineY.toFixed(2)} Z`;
+    currentBucket.push(currentPath);
+
+    currentBucket = bucketFor(v2);
+    currentPath = `M ${cross.x.toFixed(2)} ${baselineY.toFixed(2)} L ${cross.x.toFixed(2)} ${cross.y.toFixed(2)} L ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+
+  currentPath += ` L ${points[points.length - 1].x.toFixed(2)} ${baselineY.toFixed(2)} Z`;
+  currentBucket.push(currentPath);
+
+  return {
+    positive: positive.join(" "),
+    negative: negative.join(" "),
+  };
+}
+
 function aggregateTimelinePoints(points, overallWinrate) {
   if (!Array.isArray(points) || !points.length) return [];
 
@@ -1805,10 +1892,11 @@ function timelineMetricHtml(label, value, kind) {
 }
 
 function timelineTooltipHtml(point) {
+  const winrateTone = (Number(point.winrate) || 0) >= 0.5 ? "isWinratePositive" : "isWinrateNegative";
   return `
     <div class="timelineTooltipDate">${escapeHtml(formatTimelineRange(point.first_day || point.day, point.last_day || point.day))}</div>
     <div class="timelineTooltipRow isPopularity"><span>${escapeHtml(t("popularity"))}</span><b>${escapeHtml(fmtPct(point.popularity || 0))}</b></div>
-    <div class="timelineTooltipRow isWinrate"><span>${escapeHtml(t("winrate"))}</span><b>${escapeHtml(fmtPct(point.winrate || 0))}</b></div>
+    <div class="timelineTooltipRow ${winrateTone}"><span>${escapeHtml(t("winrate"))}</span><b>${escapeHtml(fmtPct(point.winrate || 0))}</b></div>
     <div class="timelineTooltipRow isGames"><span>${escapeHtml(t("games"))}</span><b>${escapeHtml(fmtInt(point.games || 0))}</b></div>
   `;
 }
@@ -1840,9 +1928,14 @@ function timelineOverlayCardHtml(points) {
   const latestPop = popularity[popularity.length - 1] || 0;
   const peakPop = Math.max(...popularity);
   const latestWin = winrate[winrate.length - 1] || 0;
-  const peakWin = Math.max(...winrate);
   const lastPopPoint = popGeo.points[popGeo.points.length - 1] || { x: 0, y: 0 };
   const lastWinPoint = winGeo.points[winGeo.points.length - 1] || { x: 0, y: 0 };
+  const winratePaths = buildThresholdLinePaths(winrate, winGeo.points, 0.5);
+  const lastWinTone = latestWin >= 0.5 ? "isWinratePositive" : "isWinrateNegative";
+  const thresholdY = (winDomain.max > winDomain.min && winDomain.min <= 0.5 && winDomain.max >= 0.5)
+    ? (winGeo.padY + ((1 - ((0.5 - winDomain.min) / (winDomain.max - winDomain.min))) * (winGeo.height - (winGeo.padY * 2))))
+    : null;
+  const winrateAreas = thresholdY !== null ? buildThresholdAreaPaths(winrate, winGeo.points, 0.5, thresholdY) : { positive: "", negative: "" };
   const games = points.map(point => Math.max(0, Number(point.games) || 0));
   const maxGames = Math.max(1, ...games);
   const barWidth = clampNumber((popGeo.width - (popGeo.padX * 2)) / Math.max(points.length, 1) * 0.62, 3, 14);
@@ -1879,26 +1972,28 @@ function timelineOverlayCardHtml(points) {
         <div class="timelineTooltip" data-role="timeline-tooltip" hidden></div>
         <svg class="timelineSvg" data-role="timeline-overlay-svg" viewBox="0 0 ${popGeo.width} ${popGeo.height}" role="img" aria-label="${escapeHtml(`${t("popularity")} / ${t("winrate")}`)}">
           <defs>
-            <linearGradient id="timeline_popularity_fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#9dd7ff" stop-opacity="0.20"></stop>
-              <stop offset="100%" stop-color="#4a8dff" stop-opacity="0.02"></stop>
+            <linearGradient id="timeline_winrate_positive_fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#9cf0be" stop-opacity="0.22"></stop>
+              <stop offset="100%" stop-color="#42c978" stop-opacity="0.03"></stop>
             </linearGradient>
-            <linearGradient id="timeline_winrate_fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#9cf0be" stop-opacity="0.14"></stop>
-              <stop offset="100%" stop-color="#42c978" stop-opacity="0.01"></stop>
+            <linearGradient id="timeline_winrate_negative_fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#ff9a9a" stop-opacity="0.20"></stop>
+              <stop offset="100%" stop-color="#d95757" stop-opacity="0.03"></stop>
             </linearGradient>
           </defs>
           ${gridHtml}
           ${volumeBarsHtml}
+          ${thresholdY !== null ? `<line class="timelineThresholdLine" x1="${winGeo.padX}" y1="${thresholdY.toFixed(2)}" x2="${winGeo.width - winGeo.padX}" y2="${thresholdY.toFixed(2)}"></line>` : ""}
           <line class="timelineHoverLine" data-role="timeline-hover-line" x1="0" y1="${popGeo.padY}" x2="0" y2="${popGeo.height - popGeo.padY}"></line>
-          <path d="${popGeo.area}" fill="url(#timeline_popularity_fill)"></path>
-          <path d="${winGeo.area}" fill="url(#timeline_winrate_fill)"></path>
+          <path d="${winrateAreas.negative}" fill="url(#timeline_winrate_negative_fill)"></path>
+          <path d="${winrateAreas.positive}" fill="url(#timeline_winrate_positive_fill)"></path>
           <path d="${popGeo.line}" class="timelineSeriesLine isPopularity" fill="none"></path>
-          <path d="${winGeo.line}" class="timelineSeriesLine isWinrate" fill="none"></path>
+          <path d="${winratePaths.negative}" class="timelineSeriesLine isWinrateNegative" fill="none"></path>
+          <path d="${winratePaths.positive}" class="timelineSeriesLine isWinratePositive" fill="none"></path>
           <circle cx="${lastPopPoint.x.toFixed(2)}" cy="${lastPopPoint.y.toFixed(2)}" r="5" class="timelineSeriesDot isPopularity"></circle>
-          <circle cx="${lastWinPoint.x.toFixed(2)}" cy="${lastWinPoint.y.toFixed(2)}" r="5" class="timelineSeriesDot isWinrate"></circle>
+          <circle cx="${lastWinPoint.x.toFixed(2)}" cy="${lastWinPoint.y.toFixed(2)}" r="5" class="timelineSeriesDot ${lastWinTone}"></circle>
           <circle cx="${lastPopPoint.x.toFixed(2)}" cy="${lastPopPoint.y.toFixed(2)}" r="6" class="timelineHoverDot isPopularity" data-role="timeline-hover-pop"></circle>
-          <circle cx="${lastWinPoint.x.toFixed(2)}" cy="${lastWinPoint.y.toFixed(2)}" r="6" class="timelineHoverDot isWinrate" data-role="timeline-hover-win"></circle>
+          <circle cx="${lastWinPoint.x.toFixed(2)}" cy="${lastWinPoint.y.toFixed(2)}" r="6" class="timelineHoverDot ${lastWinTone}" data-role="timeline-hover-win"></circle>
         </svg>
       </div>
       <div class="timelineAxis">
@@ -1946,6 +2041,9 @@ function bindTimelineOverlayInteractions(mount, interaction) {
     hoverPop.setAttribute('cy', popPoint.y.toFixed(2));
     hoverWin.setAttribute('cx', winPoint.x.toFixed(2));
     hoverWin.setAttribute('cy', winPoint.y.toFixed(2));
+    const winPositive = (Number(point.winrate) || 0) >= 0.5;
+    hoverWin.classList.toggle('isWinratePositive', winPositive);
+    hoverWin.classList.toggle('isWinrateNegative', !winPositive);
     hoverPop.style.opacity = '1';
     hoverWin.style.opacity = '1';
 
@@ -2094,6 +2192,7 @@ async function loadDetail(key, nameHint) {
                 <div class="heroTitle">${escapeHtml(d.localized_name || d.name)}</div>
                 <div class="heroSub">
                   <span class="chip"><span>${t("games")}</span> <b>${fmtInt(d.games)}</b></span>
+                  <span class="chip"><span>${t("popularity")}</span> <b>${fmtPct(d.popularity)}</b></span>
                   <span class="chip"><span>${t("winrate")}</span> <b>${fmtPct(d.winrate)}</b></span>
                   <span class="chip"><span>${t("lead")}</span> <b>${fmtPct(d.lead_rate)}</b></span>
                   <span class="chip"><span>ELO</span> <b>${fmt1NoGroup(d.avg_elo)}</b></span>

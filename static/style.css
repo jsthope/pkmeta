@@ -1080,7 +1080,7 @@ tbody tr.clickable:hover{ background: #303030; }
 }
 
 .timelineLegendSwatch.isWinrate{
-  background: #42c978;
+  background: linear-gradient(90deg, #d95757 0%, #d95757 48%, #42c978 52%, #42c978 100%);
 }
 
 .timelineLegendSwatch.isGames{
@@ -1228,8 +1228,13 @@ tbody tr.clickable:hover{ background: #303030; }
   stroke: #4a8dff;
 }
 
-.timelineSeriesLine.isWinrate{
+.timelineSeriesLine.isWinratePositive{
   stroke: #42c978;
+  stroke-dasharray: 12 8;
+}
+
+.timelineSeriesLine.isWinrateNegative{
+  stroke: #d95757;
   stroke-dasharray: 12 8;
 }
 
@@ -1242,12 +1247,22 @@ tbody tr.clickable:hover{ background: #303030; }
   fill: #4a8dff;
 }
 
-.timelineSeriesDot.isWinrate{
+.timelineSeriesDot.isWinratePositive{
   fill: #42c978;
+}
+
+.timelineSeriesDot.isWinrateNegative{
+  fill: #d95757;
 }
 
 .timelineVolumeBar{
   fill: rgba(255,255,255,.12);
+}
+
+.timelineThresholdLine{
+  stroke: rgba(255,255,255,.18);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 8;
 }
 
 .timelineHoverLine{
@@ -1309,8 +1324,12 @@ tbody tr.clickable:hover{ background: #303030; }
   color: #9dd7ff;
 }
 
-.timelineTooltipRow.isWinrate b{
+.timelineTooltipRow.isWinratePositive b{
   color: #9cf0be;
+}
+
+.timelineTooltipRow.isWinrateNegative b{
+  color: #ff9a9a;
 }
 
 .timelineTooltipRow.isGames b{

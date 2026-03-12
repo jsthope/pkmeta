@@ -1772,14 +1772,6 @@ def make_app(
 
         conn = get_conn(db_path)
 
-        denom_row = conn.execute(
-            "SELECT COALESCE(SUM(games),0) AS s FROM pokemon_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
-            (formatid, elo_min, elo_max),
-        ).fetchone()
-        total_games_sum = int(denom_row["s"]) if denom_row else 0
-        if total_games_sum <= 0:
-            total_games_sum = 1
-
         matches_row = conn.execute(
             "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
             (formatid, elo_min, elo_max),
@@ -1823,7 +1815,7 @@ def make_app(
             sum_elo = int(r["sum_elo"])
 
             winrate = wins / games if games else 0.0
-            denom = max(1, total_games_sum)
+            denom = max(1, 2 * matches)
             popularity = games / denom
 
             avg_elo = (sum_elo / games) if games else 0.0
@@ -1904,7 +1896,7 @@ def make_app(
                 "elo_min": elo_min,
                 "elo_max": elo_max,
                 "items": items[:limit],
-                "meta": {"matches": matches, "total_games_sum": total_games_sum, "min_games_default": min_games_default},
+                "meta": {"matches": matches, "min_games_default": min_games_default},
             }
         )
 
@@ -1967,6 +1959,7 @@ def make_app(
         dmg_taken = int(base["dmg_taken"]) / 100.0
 
         winrate = wins / games if games else 0.0
+        popularity = games / max(1, 2 * matches)
         avg_elo = sum_elo / games if games else 0.0
         lead_rate = leads / used if used else 0.0
         kd = kills / max(1, deaths)
@@ -1978,7 +1971,7 @@ def make_app(
             if "elo_bucket" in day_cols and "elo_bucket" in day_total_cols:
                 ser_rows = conn.execute(
                     """
-                    SELECT d.day AS day, SUM(d.games) AS g, SUM(d.wins) AS w, SUM(t.games_sum) AS tot
+                    SELECT d.day AS day, SUM(d.games) AS g, SUM(d.wins) AS w, SUM(t.matches) AS m
                     FROM pokemon_day d
                     JOIN day_totals t
                       ON (t.formatid=d.formatid AND t.elo_bucket=d.elo_bucket AND t.day=d.day)
@@ -1991,7 +1984,7 @@ def make_app(
             else:
                 ser_rows = conn.execute(
                     """
-                    SELECT d.day AS day, SUM(d.games) AS g, SUM(d.wins) AS w, SUM(t.games_sum) AS tot
+                    SELECT d.day AS day, SUM(d.games) AS g, SUM(d.wins) AS w, SUM(t.matches) AS m
                     FROM pokemon_day d
                     JOIN day_totals t ON (t.formatid=d.formatid AND t.day=d.day)
                     WHERE d.formatid=? AND d.key=?
@@ -2010,16 +2003,16 @@ def make_app(
         day_wins: List[int] = []
         day_totals: List[int] = []
         for r in ser_rows:
-            tot = int(r["tot"] or 0)
+            day_matches = int(r["m"] or 0)
             g = int(r["g"] or 0)
             w = int(r["w"] or 0)
-            if g <= 0 or tot <= 0:
+            if g <= 0 or day_matches <= 0:
                 continue
             days.append(str(r["day"]))
             day_games.append(g)
             day_wins.append(w)
-            day_totals.append(tot)
-            pops.append(g / tot)
+            day_totals.append(2 * day_matches)
+            pops.append(g / max(1, 2 * day_matches))
             day_winrates.append(w / g)
 
         first_day = days[0] if days else ""
@@ -2198,6 +2191,7 @@ def make_app(
                 "localized_name": localized_name,
                 "games": games,
                 "wins": wins,
+                "popularity": popularity,
                 "winrate": winrate,
                 "avg_elo": avg_elo,
                 "lead_rate": lead_rate,
