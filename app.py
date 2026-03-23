@@ -12,7 +12,7 @@ import re
 import sqlite3
 import unicodedata
 from io import StringIO
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 from urllib.request import Request, urlopen
 
 from flask import Flask, Response, jsonify, redirect, render_template, request
@@ -564,6 +564,15 @@ def _matches_for_window(db_path: str, formatid: str, elo_min: int, elo_max: int)
     finally:
         conn.close()
     return int(row["m"]) if row else 0
+
+
+def _resolve_teams_db_path(teams_db_path: str, formatid: str) -> Optional[str]:
+    if not teams_db_path:
+        return None
+    if os.path.isdir(teams_db_path):
+        candidate = os.path.join(teams_db_path, f"{formatid}.sqlite")
+        return candidate if os.path.exists(candidate) else None
+    return teams_db_path if os.path.exists(teams_db_path) else None
 
 
 _DECIMAL_COMMA_LANGS = {"fr", "de", "es", "it"}
@@ -1208,7 +1217,8 @@ def _team_items_payload(
     elo_max: int,
     combo_size: int,
 ) -> Dict[str, Any]:
-    if not os.path.exists(teams_db_path):
+    resolved_teams_db_path = _resolve_teams_db_path(teams_db_path, formatid)
+    if not resolved_teams_db_path:
         return {
             "formatid": formatid,
             "elo_min": elo_min,
@@ -1226,7 +1236,7 @@ def _team_items_payload(
     identity_map = load_pokedex_identity_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
     poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
 
-    conn = get_conn(teams_db_path)
+    conn = get_conn(resolved_teams_db_path)
     try:
         _ensure_team_cache_schema(conn)
         matches = _populate_team_query_cache(conn, formatid, combo_size, elo_min, elo_max)

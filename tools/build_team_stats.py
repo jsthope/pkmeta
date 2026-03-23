@@ -154,13 +154,18 @@ def main() -> None:
     ap.add_argument("--elo_step", type=int, default=100)
     ap.add_argument("--min_size", type=int, default=2)
     ap.add_argument("--max_size", type=int, default=6)
-    ap.add_argument("--batch_size", type=int, default=8192)
-    ap.add_argument("--flush", type=int, default=100000)
+    ap.add_argument("--batch_size", type=int, default=2048)
+    ap.add_argument("--flush", type=int, default=2000, help="Flush SQLite every N parsed matches")
+    ap.add_argument("--flush_rows", type=int, default=100000, help="Flush early when combo cache reaches N distinct rows")
     ap.add_argument("--fast_sqlite", action="store_true", default=True, help="Use faster SQLite pragmas (synchronous=OFF)")
+    ap.add_argument("--no_fast_sqlite", action="store_false", dest="fast_sqlite", help="Use safer SQLite pragmas")
     ap.add_argument("--max_files", type=int, default=0, help="Process only N parquet files (0 = all)")
     ap.add_argument("--skip_files", type=int, default=0, help="Skip K parquet files before processing")
     ap.add_argument("--min_games", type=int, default=100, help="Drop combo rows below this game count")
+    ap.add_argument("--format_filter", action="append", dest="format_filters", help="Restrict processing to one or more formatids")
     args = ap.parse_args()
+
+    wanted_formats = {fmt.strip().lower() for fmt in (args.format_filters or []) if fmt and fmt.strip()}
 
     min_size = max(2, min(6, int(args.min_size)))
     max_size = max(min_size, min(6, int(args.max_size)))
@@ -227,6 +232,15 @@ def main() -> None:
         matches_cache.clear()
 
     seen = 0
+    since_flush = 0
+
+    def maybe_flush(force: bool = False) -> None:
+        nonlocal since_flush
+        flush_matches = max(1, int(args.flush))
+        flush_rows = max(1, int(args.flush_rows))
+        if force or since_flush >= flush_matches or len(combo_cache) >= flush_rows:
+            flush()
+            since_flush = 0
 
     for fp in tqdm(files, desc="Parquet files"):
         pf = pq.ParquetFile(fp)
@@ -240,6 +254,8 @@ def main() -> None:
                     continue
 
                 fmt = (formatid or "unknown").strip().lower() or "unknown"
+                if wanted_formats and fmt not in wanted_formats:
+                    continue
                 try:
                     elo = int(rating) if rating is not None else 0
                 except Exception:
@@ -273,10 +289,12 @@ def main() -> None:
                             vals[2] += elo
 
                 seen += 1
-                if seen % args.flush == 0:
-                    flush()
+                since_flush += 1
+                maybe_flush()
 
-    flush()
+        maybe_flush(force=True)
+
+    maybe_flush(force=True)
     rollup_all(conn)
     prune_small_rows(conn, max(1, int(args.min_games)))
     create_indexes(conn)
