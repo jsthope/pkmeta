@@ -16,5 +16,6 @@ build
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+teams-by-format
 metamon-raw-replay
 metamon-raw-replays
