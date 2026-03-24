@@ -396,6 +396,18 @@ input:focus, select:focus{
   max-width: none;
 }
 
+.warningBanner{
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--r20);
+  border: 1px solid #915057;
+  background: #6d353c;
+  color: #ffe7e9;
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .tabs{
   display: inline-flex;
   gap: 8px;

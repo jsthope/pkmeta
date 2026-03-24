@@ -84,6 +84,7 @@ DEFAULT_HOME_FORMAT = "gen9ou"
 DEFAULT_HOME_LIMIT = 50
 DEFAULT_MIN_USAGE_RATE = 0.005
 DEFAULT_HOME_TEAM_SIZE = 6
+DEFAULT_TEAM_MIN_GAMES = 100
 DATASET_SOURCE_NAME = "pokemon-showdown-replays"
 DATASET_SOURCE_URL = "https://huggingface.co/datasets/HolidayOugi/pokemon-showdown-replays"
 SITE_BRAND = (os.environ.get("PKMETA_SITE_BRAND", "Pkmeta") or "Pkmeta").strip()
@@ -554,6 +555,48 @@ def _recommended_min_games_from_matches(matches: int) -> int:
     return int(math.ceil((2 * mm) * DEFAULT_MIN_USAGE_RATE))
 
 
+def _recommended_team_min_games(matches: int) -> int:
+    mm = max(0, int(matches))
+    if mm <= 0:
+        return 0
+    return DEFAULT_TEAM_MIN_GAMES
+
+
+def _pokemon_winrate_warning_meta(db_path: str, formatid: str, elo_min: int, elo_max: int) -> Dict[str, Any]:
+    conn = get_conn(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT
+              COALESCE((SELECT SUM(matches) FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?), 0) AS matches,
+              COALESCE((SELECT SUM(brought) FROM pokemon_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?), 0) AS brought,
+              COALESCE((SELECT SUM(wins) FROM pokemon_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?), 0) AS wins
+            """,
+            (formatid, elo_min, elo_max, formatid, elo_min, elo_max, formatid, elo_min, elo_max),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    matches = int(row["matches"]) if row and row["matches"] is not None else 0
+    brought = int(row["brought"]) if row and row["brought"] is not None else 0
+    wins = int(row["wins"]) if row and row["wins"] is not None else 0
+    if matches <= 0 or brought <= 0:
+        return {"show": False}
+
+    avg_brought_per_side = brought / max(1.0, 2.0 * matches)
+    win_per_brought = wins / brought if brought else 0.0
+    show = avg_brought_per_side < 5.8 and win_per_brought < 0.49
+    return {
+        "show": show,
+        "avg_brought_per_side": avg_brought_per_side,
+        "win_per_brought": win_per_brought,
+        "message": (
+            "Winrate is biased low in this format because replays often do not reveal full teams. "
+            "Pokemon winrate here reflects revealed mons more than complete team slots."
+        ) if show else "",
+    }
+
+
 def _matches_for_window(db_path: str, formatid: str, elo_min: int, elo_max: int) -> int:
     conn = get_conn(db_path)
     try:
@@ -974,6 +1017,8 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
     footer_copy = _footer_copy_for_lang(lang)
     matches = _matches_for_window(db_path, formatid, elo_bounds["min"], elo_bounds["max"])
     default_min_games = _recommended_min_games_from_matches(matches)
+    default_team_min_games = _recommended_team_min_games(matches)
+    pokemon_winrate_warning = _pokemon_winrate_warning_meta(db_path, formatid, elo_bounds["min"], elo_bounds["max"])
 
     pokemon = _home_pokemon_rows(
         db_path=db_path,
@@ -1008,7 +1053,7 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
         required_member_keys=[],
         sort="popularity",
         order="desc",
-            min_games=default_min_games,
+            min_games=default_team_min_games,
             limit=DEFAULT_HOME_LIMIT,
             elo_min=elo_bounds["min"],
             elo_max=elo_bounds["max"],
@@ -1039,6 +1084,7 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
         "source_name": DATASET_SOURCE_NAME,
         "source_url": DATASET_SOURCE_URL,
         "footer": footer_copy,
+        "pokemon_winrate_warning": pokemon_winrate_warning,
         "initial_state": {
             "formats": formats,
             "default_format": formatid,
@@ -1047,10 +1093,17 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
             "elo_step": elo_bounds["step"],
             "types": initial_types,
             "matches": pokemon["matches"],
-            "pokemon": {"min_games": default_min_games, "sort": "popularity", "order": "desc", "preloaded": True, "min_games_auto": True},
+            "pokemon": {
+                "min_games": default_min_games,
+                "sort": "popularity",
+                "order": "desc",
+                "preloaded": True,
+                "min_games_auto": True,
+                "winrate_warning": pokemon_winrate_warning,
+            },
             "attacks": {"min_games": default_min_games, "sort": "uses", "order": "desc", "preloaded": True, "min_games_auto": True},
             "teams": {
-                "min_games": default_min_games,
+                "min_games": default_team_min_games,
                 "sort": "popularity",
                 "order": "desc",
                 "combo_size": DEFAULT_HOME_TEAM_SIZE,
@@ -1292,7 +1345,7 @@ def _team_items_payload(
         conn.close()
 
     denom = max(1, 2 * matches)
-    min_games_default = _recommended_min_games_from_matches(matches)
+    min_games_default = _recommended_team_min_games(matches)
 
     items: List[Dict[str, Any]] = []
     for r in rows:
@@ -1789,6 +1842,7 @@ def make_app(
         matches = int(matches_row["m"]) if matches_row else 0
         min_games_default = _recommended_min_games_from_matches(matches)
         min_games = clamp_int(request.args.get("min_games", min_games_default), 0, 10_000_000)
+        winrate_warning = _pokemon_winrate_warning_meta(db_path, formatid, elo_min, elo_max)
 
         rows = conn.execute(
             """
@@ -1906,7 +1960,7 @@ def make_app(
                 "elo_min": elo_min,
                 "elo_max": elo_max,
                 "items": items[:limit],
-                "meta": {"matches": matches, "min_games_default": min_games_default},
+                "meta": {"matches": matches, "min_games_default": min_games_default, "winrate_warning": winrate_warning},
             }
         )
 

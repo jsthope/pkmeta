@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
   <title id="title">pkmeta favicon</title>
   <desc id="desc">Black mark with transparent cutouts inspired by a Pokeball</desc>
+  <circle cx="200" cy="200" r="188" fill="#fff"/>
   <path fill="#000" d="M30 185A171 171 0 0 1 370 185L283 185A85 85 0 0 0 117 185Z"/>
   <path fill="#000" d="M30 215A171 171 0 0 0 370 215L283 215A85 85 0 0 1 117 215Z"/>
   <circle cx="200" cy="200" r="56" fill="#000"/>

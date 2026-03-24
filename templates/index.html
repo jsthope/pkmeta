@@ -25,7 +25,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png"/>
   <link rel="shortcut icon" href="/static/favicon.ico"/>
   <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon-180.png"/>
-  <link rel="stylesheet" href="/static/style.css?v=20260312u">
+  <link rel="stylesheet" href="/static/style.css?v=20260324a">
   <script type="application/ld+json">
   {{ seo.json_ld | tojson }}
   </script>
@@ -127,6 +127,7 @@
     </div>
 
     <div id="panel_pokemon" class="tabPanel isActive">
+      <div id="pokemon_winrate_warning" class="warningBanner" role="alert"{% if not home.pokemon_winrate_warning.show %} hidden{% endif %}>{{ home.pokemon_winrate_warning.message or '' }}</div>
       <div class="tableWrap">
         <table>
           <thead id="pokemonHead">
@@ -560,8 +561,8 @@ const viewSearchState = {
 
 const windowMinGamesCache = {};
 
-function usageWindowKey(formatid, eloMin, eloMax) {
-  return `${formatid}|${eloMin}|${eloMax}`;
+function usageWindowKey(view, formatid, eloMin, eloMax) {
+  return `${view}|${formatid}|${eloMin}|${eloMax}`;
 }
 
 function recommendedMinGamesFromMatches(matches) {
@@ -584,7 +585,7 @@ function syncMinGamesAutoFlag() {
 function applyCachedMinGamesForActiveView() {
   const s = activeViewState();
   if (!s.min_games_auto) return;
-  const key = usageWindowKey(el("formatid").value, parseInt(el("elo_min").value || "0", 10), parseInt(el("elo_max").value || "0", 10));
+  const key = usageWindowKey(activeView, el("formatid").value, parseInt(el("elo_min").value || "0", 10), parseInt(el("elo_max").value || "0", 10));
   const cached = Number(windowMinGamesCache[key]);
   const fallback = Number(s.recommended_min_games || 0);
   const nextValue = Number.isFinite(cached) ? cached : fallback;
@@ -592,18 +593,18 @@ function applyCachedMinGamesForActiveView() {
   s.min_games = el("min_games").value;
 }
 
-function rememberRecommendedMinGames(formatid, eloMin, eloMax, meta) {
+function rememberRecommendedMinGames(view, formatid, eloMin, eloMax, meta) {
   const matches = Number(meta && meta.matches);
   const recommended = Number(meta && meta.min_games_default);
   const resolved = Number.isFinite(recommended) ? recommended : recommendedMinGamesFromMatches(matches);
-  windowMinGamesCache[usageWindowKey(formatid, eloMin, eloMax)] = resolved;
+  windowMinGamesCache[usageWindowKey(view, formatid, eloMin, eloMax)] = resolved;
   return resolved;
 }
 
 function maybeApplyAutoMinGames(view, data, requestedMinGames) {
   const s = viewSearchState[view];
   if (!s) return false;
-  const recommended = rememberRecommendedMinGames(data.formatid, data.elo_min, data.elo_max, data.meta || {});
+  const recommended = rememberRecommendedMinGames(view, data.formatid, data.elo_min, data.elo_max, data.meta || {});
   s.recommended_min_games = recommended;
   if (!s.min_games_auto || requestedMinGames === recommended) {
     return false;
@@ -611,6 +612,15 @@ function maybeApplyAutoMinGames(view, data, requestedMinGames) {
   s.min_games = String(recommended);
   if (activeView === view) el("min_games").value = s.min_games;
   return true;
+}
+
+function updatePokemonWinrateWarning(meta) {
+  const node = el("pokemon_winrate_warning");
+  if (!node) return;
+  const warning = meta && meta.winrate_warning;
+  const show = Boolean(warning && warning.show && warning.message);
+  node.hidden = !show;
+  node.textContent = show ? String(warning.message) : "";
 }
 
 function resetAutoMinGamesForAllViews() {
@@ -716,6 +726,9 @@ function applyI18n() {
   el("lbl_team_members").textContent = t("teamFilter");
   el("team_picker_search").placeholder = t("searchPokemon");
   el("rules_notice").textContent = t("rulesNotice");
+  if (el("pokemon_winrate_warning").hidden !== true && !el("pokemon_winrate_warning").textContent) {
+    updatePokemonWinrateWarning((INITIAL_STATE.pokemon || {}).winrate_warning || null);
+  }
   el("modalClose").textContent = t("closeEsc");
   if (!el("meta").textContent || /loading|chargement/i.test(el("meta").textContent)) {
     el("meta").textContent = t("loadingDots");
@@ -1157,6 +1170,7 @@ function matchesInitialWindow() {
 
 function setDefaultMeta() {
   el("meta").textContent = `${t("formatMeta")}: ${INITIAL_STATE.default_format} • ${t("eloMeta")}: ${fmtInt(INITIAL_STATE.elo_min)}-${fmtInt(INITIAL_STATE.elo_max)} • ${t("matchesMeta")}: ${fmtInt(INITIAL_STATE.matches)}`;
+  updatePokemonWinrateWarning((INITIAL_STATE.pokemon || {}).winrate_warning || null);
 }
 
 function hydratePokemonPreloadedRows() {
@@ -1545,6 +1559,7 @@ async function loadList() {
 
   el("meta").textContent =
     `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${fmtInt(data.elo_min)}-${fmtInt(data.elo_max)} • ${t("matchesMeta")}: ${fmtInt(data.meta.matches)}`;
+  updatePokemonWinrateWarning(data.meta || null);
 
   let items = Array.isArray(data.items) ? data.items : [];
 
