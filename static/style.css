@@ -723,16 +723,53 @@ tbody tr.clickable:hover{ background: #303030; }
   align-items:center;
   gap: 12px;
   min-width: 240px;
+  position: relative;
+  overflow: visible;
 }
 
-.poke img{
+.pokeSpriteFrame{
   width: var(--spriteTable);
   height: var(--spriteTable);
-  image-rendering: pixelated;
   border-radius: 6px;
   background: rgba(0,0,0,.15);
   border: 1px solid rgba(255,255,255,.10);
   flex: 0 0 auto;
+  position: relative;
+  z-index: 0;
+  overflow: visible;
+}
+
+.pokeSpriteFrame::after{
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  height: 14px;
+  border-radius: 0 0 6px 6px;
+  background: rgba(0,0,0,.15);
+  border: 1px solid rgba(255,255,255,.10);
+  border-top: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pokeSpriteFrame img{
+  width: calc(var(--spriteTable) + 14px);
+  height: calc(var(--spriteTable) + 14px);
+  image-rendering: pixelated;
+  object-fit: contain;
+  position: absolute;
+  left: -7px;
+  right: -7px;
+  top: -10px;
+  bottom: -2px;
+  z-index: 1;
+}
+
+.poke > div{
+  position: relative;
+  z-index: 1;
 }
 
 .poke b{

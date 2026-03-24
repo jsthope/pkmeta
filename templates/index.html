@@ -148,7 +148,7 @@
             <tr class="clickable" data-key="{{ r.key }}" data-name="{{ r.localized_name or r.name }}">
               <td>
                 <div class="poke">
-                  <img data-srcs='{{ r.sprite_urls | tojson }}' src="{{ r.sprite_urls[0] if r.sprite_urls else '' }}" alt="" loading="lazy" decoding="async" />
+                  <span class="pokeSpriteFrame"><img data-srcs='{{ r.sprite_urls | tojson }}' src="{{ r.sprite_urls[0] if r.sprite_urls else '' }}" alt="" loading="lazy" decoding="async" /></span>
                   <div>
                     <div class="pokeNameLine"><b>{{ r.localized_name or r.name }}</b>
                       {% if r.types %}
@@ -1621,7 +1621,7 @@ async function loadList() {
     const firstSrc = srcs.length ? srcs[0] : "";
     td0.innerHTML = `
       <div class="poke">
-        <img data-srcs='${JSON.stringify(srcs)}' src="${firstSrc}" alt="" loading="lazy" decoding="async" />
+        <span class="pokeSpriteFrame"><img data-srcs='${JSON.stringify(srcs)}' src="${firstSrc}" alt="" loading="lazy" decoding="async" /></span>
         <div>
           <div class="pokeNameLine"><b>${escapeHtml(r.localized_name || r.name)}</b>${typeIconsHtml(r.types)}</div>
           <div class="muted">${fmtInt(r.games)} ${t("games").toLowerCase()} • ${fmtInt(r.wins)} ${t("wins")}</div>
