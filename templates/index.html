@@ -329,7 +329,7 @@
     <div class="modal" role="document">
       <div class="modalHeader">
         <div class="modalHeaderMain">
-          <b id="modalTitle">Details</b>
+          <div id="modalTitle" class="modalTitleWrap">Details</div>
           <div id="modalDetailControls" class="modalDetailControls"></div>
         </div>
         <button id="modalClose" class="btn">Close (Esc)</button>
@@ -1604,6 +1604,18 @@ async function loadList() {
     return rev ? (kb - ka) : (ka - kb);
   });
 
+  const pokemonTypeCache = typeOptionsCache.pokemon;
+  const activeCacheKey = `${f.formatid}|${f.elo_min}|${f.elo_max}`;
+  const visibleTypes = qq
+    ? sanitizeTypes(Array.from(new Set(items.flatMap(it => Array.isArray(it.types) ? it.types : []))))
+    : ((pokemonTypeCache && pokemonTypeCache.key === activeCacheKey && Array.isArray(pokemonTypeCache.types)) ? pokemonTypeCache.types : []);
+  if (qq && typeFilterState.pokemon && !visibleTypes.includes(typeFilterState.pokemon)) {
+    typeFilterState.pokemon = "";
+  }
+  if (activeView === "pokemon") {
+    renderTypeButtons(visibleTypes);
+  }
+
   items = items.slice(0, Math.max(10, f.limit));
   prewarmDetailIfNeeded(items, f);
 
@@ -2177,6 +2189,111 @@ function bindDetailTabs() {
 }
 
 let currentDetailState = null;
+let detailPickerResults = [];
+
+function renderDetailPokemonPickerResults(query) {
+  const menu = el("detailPokemonPickerMenu");
+  if (!menu) return;
+  const q = normalizeForSearch(query || "");
+  const options = Array.isArray(pokemonPickerOptions) ? pokemonPickerOptions : [];
+  const filtered = options.filter(option => {
+    if (!option || !option.key) return false;
+    if (!q) return true;
+    return normalizeForSearch(option.localized_name || "").includes(q)
+      || normalizeForSearch(option.name || "").includes(q)
+      || normalizeForSearch(option.key || "").includes(q);
+  }).slice(0, 50);
+  detailPickerResults = filtered;
+  menu.innerHTML = filtered.length
+    ? filtered.map(option => {
+        const srcs = Array.isArray(option.sprite_urls) ? option.sprite_urls : [];
+        return `<button type="button" class="teamPickerOption" data-detail-key="${escapeHtml(option.key)}" data-detail-name="${escapeHtml(option.localized_name || option.name || option.key)}"><img data-srcs='${JSON.stringify(srcs)}' src="${srcs[0] || ""}" alt="" loading="lazy" decoding="async" /><span>${escapeHtml(option.localized_name || option.name || option.key)}</span></button>`;
+      }).join("")
+    : `<div class="teamPickerEmpty">${escapeHtml(t("noTeamData"))}</div>`;
+  menu.classList.toggle("isHidden", !filtered.length);
+  menu.querySelectorAll("img[data-srcs]").forEach(img => {
+    img.onerror = function() { nextSprite(this); };
+  });
+}
+
+async function renderDetailPokemonPicker(state, displayName) {
+  const mount = el("modalTitle");
+  if (!mount) return;
+  await ensurePokemonPickerOptions();
+  const shownName = displayName || state.nameHint || "";
+  mount.innerHTML = `
+    <div class="detailPokemonPicker">
+      <div class="detailPokemonPickerField">
+        <input id="detail_pokemon_search" class="detailPokemonPickerInput" type="text" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(t("searchPokemon"))}" value="${escapeHtml(shownName)}" aria-label="${escapeHtml(t("searchPokemon"))}" data-current-name="${escapeHtml(shownName)}" />
+        <span class="detailPokemonPickerIcon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M10.5 4a6.5 6.5 0 1 0 4.03 11.6l4.43 4.43 1.41-1.41-4.43-4.43A6.5 6.5 0 0 0 10.5 4Zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z"/>
+          </svg>
+        </span>
+      </div>
+      <div id="detailPokemonPickerMenu" class="detailPokemonPickerMenu isHidden"></div>
+    </div>
+  `;
+
+  const input = el("detail_pokemon_search");
+  const menu = el("detailPokemonPickerMenu");
+  if (!input || !menu) return;
+  const currentName = input.dataset.currentName || "";
+
+  const hideMenu = () => menu.classList.add("isHidden");
+  const activateSearchField = () => {
+    if ((input.value || "") === currentName) {
+      input.placeholder = currentName || t("searchPokemon");
+      input.value = "";
+    }
+  };
+  const restoreDisplayValue = () => {
+    if (!(input.value || "").trim()) {
+      input.value = currentName;
+      input.placeholder = t("searchPokemon");
+    }
+  };
+
+  input.addEventListener("focus", () => {
+    activateSearchField();
+    renderDetailPokemonPickerResults(input.value || "");
+  });
+  input.addEventListener("input", () => renderDetailPokemonPickerResults(input.value || ""));
+  input.addEventListener("click", () => {
+    activateSearchField();
+    renderDetailPokemonPickerResults(input.value || "");
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      hideMenu();
+      restoreDisplayValue();
+      input.blur();
+    }
+  });
+  input.addEventListener("blur", () => {
+    setTimeout(() => {
+      hideMenu();
+      restoreDisplayValue();
+    }, 120);
+  });
+  menu.addEventListener("mousedown", (e) => e.preventDefault());
+  menu.addEventListener("click", async (e) => {
+    const option = e.target.closest(".teamPickerOption[data-detail-key]");
+    if (!option || !currentDetailState) return;
+    const nextKey = option.dataset.detailKey || "";
+    const nextName = option.dataset.detailName || nextKey;
+    hideMenu();
+    await loadDetail(nextKey, nextName, {
+      formatid: currentDetailState.formatid,
+      elo_min: currentDetailState.elo_min,
+      elo_max: currentDetailState.elo_max,
+      bounds: currentDetailState.bounds,
+      available_formats: currentDetailState.available_formats,
+    });
+  });
+}
 
 async function fetchDetailEloBounds(formatid) {
   const res = await fetch("/api/elo_bounds?formatid=" + encodeURIComponent(formatid));
@@ -2305,7 +2422,7 @@ async function loadDetail(key, nameHint, detailFilters = null) {
     }
 
     await renderDetailHeaderControls({ key, nameHint, ...f, available_formats: d.available_formats || [] });
-    el("modalTitle").textContent = `${t("details")} - ${d.localized_name || d.name || nameHint || t("tabPokemon")}`;
+    await renderDetailPokemonPicker({ key, nameHint, ...f, available_formats: d.available_formats || [] }, d.localized_name || d.name || nameHint || "");
 
     const spriteList = preferAniFirst(d.sprite_urls || []);
 

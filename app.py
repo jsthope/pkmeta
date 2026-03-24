@@ -85,6 +85,7 @@ DEFAULT_HOME_LIMIT = 50
 DEFAULT_MIN_USAGE_RATE = 0.005
 DEFAULT_HOME_TEAM_SIZE = 6
 DEFAULT_TEAM_MIN_GAMES = 100
+_PICKER_MERGE_TO_BASE = {"minior", "florges", "squawkabilly", "pikachu"}
 DATASET_SOURCE_NAME = "pokemon-showdown-replays"
 DATASET_SOURCE_URL = "https://huggingface.co/datasets/HolidayOugi/pokemon-showdown-replays"
 SITE_BRAND = (os.environ.get("PKMETA_SITE_BRAND", "Pkmeta") or "Pkmeta").strip()
@@ -676,6 +677,18 @@ def _footer_copy_for_lang(lang: str) -> Dict[str, str]:
     return FOOTER_COPY.get(lang_norm, FOOTER_COPY["en"])
 
 
+def _picker_key_and_name(key: str, name: str) -> Tuple[str, str]:
+    clean_key = _to_id(key)
+    clean_name = (name or key or "").strip()
+    if not clean_key:
+        return ("", "")
+    base_name = clean_name.split("-", 1)[0].strip() or clean_name
+    base_key = _to_id(base_name)
+    if base_key in _PICKER_MERGE_TO_BASE:
+        return (base_key, base_name)
+    return (clean_key, clean_name)
+
+
 def _pokemon_picker_options(lang: str) -> List[Dict[str, Any]]:
     lang_norm = _normalize_lang(lang)
     cached = _POKEMON_PICKER_OPTION_CACHE.get(lang_norm)
@@ -685,22 +698,26 @@ def _pokemon_picker_options(lang: str) -> List[Dict[str, Any]]:
     identity_map = load_pokedex_identity_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
     localized_name_map = load_pokemon_localized_name_map(lang_norm)
     poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
-    options: List[Dict[str, Any]] = []
+    options_by_key: Dict[str, Dict[str, Any]] = {}
     for key, info in identity_map.items():
         if not key:
             continue
         name = str(info.get("name") or key)
-        localized_name = localized_name_map.get(key, localized_name_map.get(_to_id(name), name))
-        options.append(
-            {
-                "key": key,
-                "name": name,
-                "localized_name": localized_name,
-                "types": poke_type_map.get(key, []),
-                "sprite_urls": sprite_urls(key, name),
-            }
-        )
+        picker_key, picker_name = _picker_key_and_name(str(key), name)
+        if not picker_key:
+            continue
+        localized_name = localized_name_map.get(picker_key, localized_name_map.get(_to_id(picker_name), picker_name))
+        if picker_key in options_by_key:
+            continue
+        options_by_key[picker_key] = {
+            "key": picker_key,
+            "name": picker_name,
+            "localized_name": localized_name,
+            "types": poke_type_map.get(picker_key, []),
+            "sprite_urls": sprite_urls(picker_key, picker_name),
+        }
 
+    options = list(options_by_key.values())
     options.sort(key=lambda x: (_to_id(x["localized_name"]), _to_id(x["name"])))
     _POKEMON_PICKER_OPTION_CACHE[lang_norm] = options
     return options
