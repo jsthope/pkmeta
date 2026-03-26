@@ -175,7 +175,7 @@ def wilson_upper_bound(w: int, n: int, z: float = 1.96) -> float:
 # SQLite helpers
 
 def get_conn(db_path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -950,7 +950,6 @@ def _attack_items_payload(
 
         rows = conn.execute(q_sql, params).fetchall()
     except sqlite3.OperationalError:
-        conn.close()
         return {
             "formatid": formatid,
             "elo_min": elo_min,
@@ -1349,7 +1348,6 @@ def _team_items_payload(
 
         rows = conn.execute(query_sql, params).fetchall()
     except sqlite3.OperationalError:
-        conn.close()
         return {
             "formatid": formatid,
             "elo_min": elo_min,
@@ -1759,8 +1757,10 @@ def make_app(
     @app.get("/api/formats")
     def api_formats():
         conn = get_conn(db_path)
-        rows = conn.execute("SELECT DISTINCT formatid FROM matches_bucket ORDER BY formatid").fetchall()
-        conn.close()
+        try:
+            rows = conn.execute("SELECT DISTINCT formatid FROM matches_bucket ORDER BY formatid").fetchall()
+        finally:
+            conn.close()
         formats = [r["formatid"] for r in rows]
         return jsonify({"formats": formats})
 
@@ -1768,11 +1768,13 @@ def make_app(
     def api_elo_bounds():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
         conn = get_conn(db_path)
-        row = conn.execute(
-            "SELECT MIN(elo_bucket) AS mn, MAX(elo_bucket) AS mx FROM matches_bucket WHERE formatid=?",
-            (formatid,),
-        ).fetchone()
-        conn.close()
+        try:
+            row = conn.execute(
+                "SELECT MIN(elo_bucket) AS mn, MAX(elo_bucket) AS mx FROM matches_bucket WHERE formatid=?",
+                (formatid,),
+            ).fetchone()
+        finally:
+            conn.close()
         mn = int(row["mn"] if row and row["mn"] is not None else 0)
         mx = int(row["mx"] if row and row["mx"] is not None else 2000)
         return jsonify({"min": mn, "max": mx, "step": 100})
@@ -1851,39 +1853,39 @@ def make_app(
             elo_min, elo_max = elo_max, elo_min
 
         conn = get_conn(db_path)
+        try:
+            matches_row = conn.execute(
+                "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
+                (formatid, elo_min, elo_max),
+            ).fetchone()
+            matches = int(matches_row["m"]) if matches_row else 0
+            min_games_default = _recommended_min_games_from_matches(matches)
+            min_games = clamp_int(request.args.get("min_games", min_games_default), 0, 10_000_000)
+            winrate_warning = _pokemon_winrate_warning_meta(db_path, formatid, elo_min, elo_max)
 
-        matches_row = conn.execute(
-            "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
-            (formatid, elo_min, elo_max),
-        ).fetchone()
-        matches = int(matches_row["m"]) if matches_row else 0
-        min_games_default = _recommended_min_games_from_matches(matches)
-        min_games = clamp_int(request.args.get("min_games", min_games_default), 0, 10_000_000)
-        winrate_warning = _pokemon_winrate_warning_meta(db_path, formatid, elo_min, elo_max)
-
-        rows = conn.execute(
-            """
-            SELECT
-              key,
-              MIN(name) AS name,
-              SUM(games) AS games,
-              SUM(wins) AS wins,
-              SUM(sum_elo) AS sum_elo,
-              SUM(used) AS used,
-              SUM(leads) AS leads,
-              SUM(kills) AS kills,
-              SUM(deaths) AS deaths,
-              SUM(dmg_dealt) AS dmg_dealt,
-              SUM(dmg_taken) AS dmg_taken
-            FROM pokemon_bucket
-            WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
-            GROUP BY key
-            HAVING SUM(games) >= ?
-            """,
-            (formatid, elo_min, elo_max, min_games),
-        ).fetchall()
-
-        conn.close()
+            rows = conn.execute(
+                """
+                SELECT
+                  key,
+                  MIN(name) AS name,
+                  SUM(games) AS games,
+                  SUM(wins) AS wins,
+                  SUM(sum_elo) AS sum_elo,
+                  SUM(used) AS used,
+                  SUM(leads) AS leads,
+                  SUM(kills) AS kills,
+                  SUM(deaths) AS deaths,
+                  SUM(dmg_dealt) AS dmg_dealt,
+                  SUM(dmg_taken) AS dmg_taken
+                FROM pokemon_bucket
+                WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
+                GROUP BY key
+                HAVING SUM(games) >= ?
+                """,
+                (formatid, elo_min, elo_max, min_games),
+            ).fetchall()
+        finally:
+            conn.close()
         poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
         localized_name_map = load_pokemon_localized_name_map(lang)
 
@@ -1996,232 +1998,233 @@ def make_app(
             elo_min, elo_max = elo_max, elo_min
 
         conn = get_conn(db_path)
-        matches_row = conn.execute(
-            "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
-            (formatid, elo_min, elo_max),
-        ).fetchone()
-        matches = int(matches_row["m"]) if matches_row else 0
-        min_synergy_games_default = _recommended_min_games_from_matches(matches)
-        min_pair_games = clamp_int(request.args.get("min_pair_games", min_synergy_games_default), 0, 10_000_000)
-        min_vs_games = clamp_int(request.args.get("min_vs_games", min_synergy_games_default), 0, 10_000_000)
-
-        base = conn.execute(
-            """
-            SELECT
-              MIN(name) AS name,
-              SUM(games) AS games,
-              SUM(wins) AS wins,
-              SUM(sum_elo) AS sum_elo,
-              SUM(used) AS used,
-              SUM(leads) AS leads,
-              SUM(kills) AS kills,
-              SUM(deaths) AS deaths,
-              SUM(dmg_dealt) AS dmg_dealt,
-              SUM(dmg_taken) AS dmg_taken
-            FROM pokemon_bucket
-            WHERE formatid=? AND elo_bucket BETWEEN ? AND ? AND key=?
-            """,
-            (formatid, elo_min, elo_max, key),
-        ).fetchone()
-
-        if not base or base["games"] is None:
-            conn.close()
-            return jsonify({"error": "not found"}), 404
-
-        name = str(base["name"])
-        games = int(base["games"])
-        wins = int(base["wins"])
-        sum_elo = int(base["sum_elo"])
-        used = int(base["used"])
-        leads = int(base["leads"])
-        kills = int(base["kills"])
-        deaths = int(base["deaths"])
-        dmg_dealt = int(base["dmg_dealt"]) / 100.0
-        dmg_taken = int(base["dmg_taken"]) / 100.0
-
-        winrate = wins / games if games else 0.0
-        popularity = games / max(1, 2 * matches)
-        avg_elo = sum_elo / games if games else 0.0
-        lead_rate = leads / used if used else 0.0
-        kd = wilson_lower_bound(wins, games)
-
-        day_cols = get_table_columns(conn, "pokemon_day")
-        day_total_cols = get_table_columns(conn, "day_totals")
-        ser_rows: List[sqlite3.Row] = []
         try:
-            if "elo_bucket" in day_cols and "elo_bucket" in day_total_cols:
-                ser_rows = conn.execute(
-                    """
-                    SELECT d.day AS day, SUM(d.games) AS g, SUM(d.wins) AS w, SUM(t.matches) AS m
-                    FROM pokemon_day d
-                    JOIN day_totals t
-                      ON (t.formatid=d.formatid AND t.elo_bucket=d.elo_bucket AND t.day=d.day)
-                    WHERE d.formatid=? AND d.key=? AND d.elo_bucket BETWEEN ? AND ?
-                    GROUP BY d.day
-                    ORDER BY d.day ASC
-                    """,
-                    (formatid, key, elo_min, elo_max),
-                ).fetchall()
-            else:
-                ser_rows = conn.execute(
-                    """
-                    SELECT d.day AS day, SUM(d.games) AS g, SUM(d.wins) AS w, SUM(t.matches) AS m
-                    FROM pokemon_day d
-                    JOIN day_totals t ON (t.formatid=d.formatid AND t.day=d.day)
-                    WHERE d.formatid=? AND d.key=?
-                    GROUP BY d.day
-                    ORDER BY d.day ASC
-                    """,
-                    (formatid, key),
-                ).fetchall()
-        except sqlite3.OperationalError:
-            ser_rows = []
-
-        days: List[str] = []
-        pops: List[float] = []
-        day_winrates: List[float] = []
-        day_games: List[int] = []
-        day_wins: List[int] = []
-        day_totals: List[int] = []
-        for r in ser_rows:
-            day_matches = int(r["m"] or 0)
-            g = int(r["g"] or 0)
-            w = int(r["w"] or 0)
-            if g <= 0 or day_matches <= 0:
-                continue
-            days.append(str(r["day"]))
-            day_games.append(g)
-            day_wins.append(w)
-            day_totals.append(2 * day_matches)
-            pops.append(g / max(1, 2 * day_matches))
-            day_winrates.append(w / g)
-
-        first_day = days[0] if days else ""
-        last_day = days[-1] if days else ""
-
-        mate_rows = conn.execute(
-            """
-            SELECT a, b, SUM(games) AS g, SUM(wins) AS w
-            FROM mates_bucket
-            WHERE formatid=? AND elo_bucket BETWEEN ? AND ? AND (a=? OR b=?)
-            GROUP BY a, b
-            """,
-            (formatid, elo_min, elo_max, key, key),
-        ).fetchall()
-
-        mates = []
-        for r in mate_rows:
-            g = int(r["g"])
-            if g < min_pair_games:
-                continue
-            w = int(r["w"])
-            a = str(r["a"])
-            b = str(r["b"])
-            other = b if a == key else a
-            wr = w / g if g else 0.0
-            score = wilson_lower_bound(w, g)
-            mates.append((score, other, g, wr))
-
-        mates.sort(key=lambda x: x[0], reverse=True)
-        mates = mates[:3]
-
-        vs_rows = conn.execute(
-            """
-            SELECT b, SUM(games) AS g, SUM(wins) AS w
-            FROM vs_bucket
-            WHERE formatid=? AND elo_bucket BETWEEN ? AND ? AND a=?
-            GROUP BY b
-            """,
-            (formatid, elo_min, elo_max, key),
-        ).fetchall()
-
-        counters = []
-        for r in vs_rows:
-            g = int(r["g"])
-            if g < min_vs_games:
-                continue
-            w = int(r["w"])
-            b = str(r["b"])
-            wr = w / g if g else 0.0
-            if wr >= 0.5:
-                continue
-            score = wilson_upper_bound(w, g)
-            if score >= 0.5:
-                continue
-            counters.append((score, b, g, wr))
-
-        counters.sort(key=lambda x: x[0])
-        counters = counters[:3]
-
-        other_keys = [k for _, k, _, _ in mates] + [k for _, k, _, _ in counters]
-        name_map: Dict[str, str] = {}
-        if other_keys:
-            qs = ",".join("?" for _ in other_keys)
-            rows_nm = conn.execute(
-                f"""
-                SELECT key, MIN(name) AS name
+            matches_row = conn.execute(
+                "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
+                (formatid, elo_min, elo_max),
+            ).fetchone()
+            matches = int(matches_row["m"]) if matches_row else 0
+            min_synergy_games_default = _recommended_min_games_from_matches(matches)
+            min_pair_games = clamp_int(request.args.get("min_pair_games", min_synergy_games_default), 0, 10_000_000)
+            min_vs_games = clamp_int(request.args.get("min_vs_games", min_synergy_games_default), 0, 10_000_000)
+    
+            base = conn.execute(
+                """
+                SELECT
+                  MIN(name) AS name,
+                  SUM(games) AS games,
+                  SUM(wins) AS wins,
+                  SUM(sum_elo) AS sum_elo,
+                  SUM(used) AS used,
+                  SUM(leads) AS leads,
+                  SUM(kills) AS kills,
+                  SUM(deaths) AS deaths,
+                  SUM(dmg_dealt) AS dmg_dealt,
+                  SUM(dmg_taken) AS dmg_taken
                 FROM pokemon_bucket
-                WHERE formatid=? AND key IN ({qs})
-                GROUP BY key
+                WHERE formatid=? AND elo_bucket BETWEEN ? AND ? AND key=?
                 """,
-                (formatid, *other_keys),
+                (formatid, elo_min, elo_max, key),
+            ).fetchone()
+    
+            if not base or base["games"] is None:
+                return jsonify({"error": "not found"}), 404
+    
+            name = str(base["name"])
+            games = int(base["games"])
+            wins = int(base["wins"])
+            sum_elo = int(base["sum_elo"])
+            used = int(base["used"])
+            leads = int(base["leads"])
+            kills = int(base["kills"])
+            deaths = int(base["deaths"])
+            dmg_dealt = int(base["dmg_dealt"]) / 100.0
+            dmg_taken = int(base["dmg_taken"]) / 100.0
+    
+            winrate = wins / games if games else 0.0
+            popularity = games / max(1, 2 * matches)
+            avg_elo = sum_elo / games if games else 0.0
+            lead_rate = leads / used if used else 0.0
+            kd = wilson_lower_bound(wins, games)
+    
+            day_cols = get_table_columns(conn, "pokemon_day")
+            day_total_cols = get_table_columns(conn, "day_totals")
+            ser_rows: List[sqlite3.Row] = []
+            try:
+                if "elo_bucket" in day_cols and "elo_bucket" in day_total_cols:
+                    ser_rows = conn.execute(
+                        """
+                        SELECT d.day AS day, SUM(d.games) AS g, SUM(d.wins) AS w, SUM(t.matches) AS m
+                        FROM pokemon_day d
+                        JOIN day_totals t
+                          ON (t.formatid=d.formatid AND t.elo_bucket=d.elo_bucket AND t.day=d.day)
+                        WHERE d.formatid=? AND d.key=? AND d.elo_bucket BETWEEN ? AND ?
+                        GROUP BY d.day
+                        ORDER BY d.day ASC
+                        """,
+                        (formatid, key, elo_min, elo_max),
+                    ).fetchall()
+                else:
+                    ser_rows = conn.execute(
+                        """
+                        SELECT d.day AS day, SUM(d.games) AS g, SUM(d.wins) AS w, SUM(t.matches) AS m
+                        FROM pokemon_day d
+                        JOIN day_totals t ON (t.formatid=d.formatid AND t.day=d.day)
+                        WHERE d.formatid=? AND d.key=?
+                        GROUP BY d.day
+                        ORDER BY d.day ASC
+                        """,
+                        (formatid, key),
+                    ).fetchall()
+            except sqlite3.OperationalError:
+                ser_rows = []
+    
+            days: List[str] = []
+            pops: List[float] = []
+            day_winrates: List[float] = []
+            day_games: List[int] = []
+            day_wins: List[int] = []
+            day_totals: List[int] = []
+            for r in ser_rows:
+                day_matches = int(r["m"] or 0)
+                g = int(r["g"] or 0)
+                w = int(r["w"] or 0)
+                if g <= 0 or day_matches <= 0:
+                    continue
+                days.append(str(r["day"]))
+                day_games.append(g)
+                day_wins.append(w)
+                day_totals.append(2 * day_matches)
+                pops.append(g / max(1, 2 * day_matches))
+                day_winrates.append(w / g)
+    
+            first_day = days[0] if days else ""
+            last_day = days[-1] if days else ""
+    
+            mate_rows = conn.execute(
+                """
+                SELECT a, b, SUM(games) AS g, SUM(wins) AS w
+                FROM mates_bucket
+                WHERE formatid=? AND elo_bucket BETWEEN ? AND ? AND (a=? OR b=?)
+                GROUP BY a, b
+                """,
+                (formatid, elo_min, elo_max, key, key),
             ).fetchall()
-            name_map = {str(r["key"]): str(r["name"]) for r in rows_nm if r["name"] is not None}
-
-        format_rows = conn.execute(
-            """
-            SELECT formatid, SUM(games) AS g
-            FROM pokemon_bucket
-            WHERE key=? AND formatid <> 'all'
-            GROUP BY formatid
-            ORDER BY g DESC, formatid ASC
-            """,
-            (key,),
-        ).fetchall()
-        available_formats = [str(r["formatid"]) for r in format_rows if r["formatid"] is not None]
-        if available_formats:
-            available_formats = ["all", *available_formats]
-
-        moves_rows = conn.execute(
-            "SELECT move, uses FROM pokemon_moves WHERE formatid=? AND key=? ORDER BY uses DESC",
-            (formatid, key),
-        ).fetchall()
-
-        items_rows = conn.execute(
-            "SELECT item, uses FROM pokemon_items WHERE formatid=? AND key=? ORDER BY uses DESC",
-            (formatid, key),
-        ).fetchall()
-
-        abilities_map = load_pokedex_abilities_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
-        expected_abilities = abilities_map.get(key, abilities_map.get(_to_id(name), []))
-        expected_set = set(expected_abilities)
-        ability_localized_map = load_ability_localized_name_map(lang)
-
-        abilities_payload: List[Dict[str, Any]] = []
-        try:
-            ab_rows = conn.execute(
-                "SELECT ability, uses FROM pokemon_abilities WHERE formatid=? AND key=? ORDER BY uses DESC",
+    
+            mates = []
+            for r in mate_rows:
+                g = int(r["g"])
+                if g < min_pair_games:
+                    continue
+                w = int(r["w"])
+                a = str(r["a"])
+                b = str(r["b"])
+                other = b if a == key else a
+                wr = w / g if g else 0.0
+                score = wilson_lower_bound(w, g)
+                mates.append((score, other, g, wr))
+    
+            mates.sort(key=lambda x: x[0], reverse=True)
+            mates = mates[:3]
+    
+            vs_rows = conn.execute(
+                """
+                SELECT b, SUM(games) AS g, SUM(wins) AS w
+                FROM vs_bucket
+                WHERE formatid=? AND elo_bucket BETWEEN ? AND ? AND a=?
+                GROUP BY b
+                """,
+                (formatid, elo_min, elo_max, key),
+            ).fetchall()
+    
+            counters = []
+            for r in vs_rows:
+                g = int(r["g"])
+                if g < min_vs_games:
+                    continue
+                w = int(r["w"])
+                b = str(r["b"])
+                wr = w / g if g else 0.0
+                if wr >= 0.5:
+                    continue
+                score = wilson_upper_bound(w, g)
+                if score >= 0.5:
+                    continue
+                counters.append((score, b, g, wr))
+    
+            counters.sort(key=lambda x: x[0])
+            counters = counters[:3]
+    
+            other_keys = [k for _, k, _, _ in mates] + [k for _, k, _, _ in counters]
+            name_map: Dict[str, str] = {}
+            if other_keys:
+                qs = ",".join("?" for _ in other_keys)
+                rows_nm = conn.execute(
+                    f"""
+                    SELECT key, MIN(name) AS name
+                    FROM pokemon_bucket
+                    WHERE formatid=? AND key IN ({qs})
+                    GROUP BY key
+                    """,
+                    (formatid, *other_keys),
+                ).fetchall()
+                name_map = {str(r["key"]): str(r["name"]) for r in rows_nm if r["name"] is not None}
+    
+            format_rows = conn.execute(
+                """
+                SELECT formatid, SUM(games) AS g
+                FROM pokemon_bucket
+                WHERE key=? AND formatid <> 'all'
+                GROUP BY formatid
+                ORDER BY g DESC, formatid ASC
+                """,
+                (key,),
+            ).fetchall()
+            available_formats = [str(r["formatid"]) for r in format_rows if r["formatid"] is not None]
+            if available_formats:
+                available_formats = ["all", *available_formats]
+    
+            moves_rows = conn.execute(
+                "SELECT move, uses FROM pokemon_moves WHERE formatid=? AND key=? ORDER BY uses DESC",
                 (formatid, key),
             ).fetchall()
-            if expected_set:
-                ab_rows = [r for r in ab_rows if str(r["ability"]) in expected_set]
-            total_ab = sum(int(r["uses"]) for r in ab_rows)
-            if total_ab > 0:
-                for r in ab_rows:
-                    uses = int(r["uses"])
-                    ability_name = str(r["ability"])
-                    abilities_payload.append(
-                        {
-                            "ability": ability_name,
-                            "localized_ability": ability_localized_map.get(_to_id(ability_name), ability_name),
-                            "uses": uses,
-                            "pct": uses / total_ab,
-                        }
-                    )
-        except sqlite3.OperationalError:
-            pass
-
-        conn.close()
+    
+            items_rows = conn.execute(
+                "SELECT item, uses FROM pokemon_items WHERE formatid=? AND key=? ORDER BY uses DESC",
+                (formatid, key),
+            ).fetchall()
+    
+            abilities_map = load_pokedex_abilities_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+            expected_abilities = abilities_map.get(key, abilities_map.get(_to_id(name), []))
+            expected_set = set(expected_abilities)
+            ability_localized_map = load_ability_localized_name_map(lang)
+    
+            abilities_payload: List[Dict[str, Any]] = []
+            try:
+                ab_rows = conn.execute(
+                    "SELECT ability, uses FROM pokemon_abilities WHERE formatid=? AND key=? ORDER BY uses DESC",
+                    (formatid, key),
+                ).fetchall()
+                if expected_set:
+                    ab_rows = [r for r in ab_rows if str(r["ability"]) in expected_set]
+                total_ab = sum(int(r["uses"]) for r in ab_rows)
+                if total_ab > 0:
+                    for r in ab_rows:
+                        uses = int(r["uses"])
+                        ability_name = str(r["ability"])
+                        abilities_payload.append(
+                            {
+                                "ability": ability_name,
+                                "localized_ability": ability_localized_map.get(_to_id(ability_name), ability_name),
+                                "uses": uses,
+                                "pct": uses / total_ab,
+                            }
+                        )
+            except sqlite3.OperationalError:
+                pass
+    
+        finally:
+            conn.close()
         move_type_map = load_move_type_map(os.environ.get("PKMETA_MOVES_JSON", ""))
         poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
         localized_name_map = load_pokemon_localized_name_map(lang)
@@ -2358,10 +2361,9 @@ def make_app(
                 (formatid, elo_min, elo_max),
             ).fetchall()
         except sqlite3.OperationalError:
-            conn.close()
             return jsonify({"types": []})
-
-        conn.close()
+        finally:
+            conn.close()
         types = [str(r["move_type"]) for r in rows if r["move_type"] is not None]
         return jsonify({"types": types})
 

@@ -1349,12 +1349,89 @@ function closeModal() {
   el("modalDetailControls").innerHTML = "";
   currentDetailState = null;
   document.documentElement.classList.remove("modal-open");
+  updateUrlState();
 }
 el("modalClose").addEventListener("click", closeModal);
 el("modalBack").addEventListener("click", (e) => { if (e.target === el("modalBack")) closeModal(); });
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && el("modalBack").style.display === "flex") closeModal();
 });
+
+// --- URL state sharing ---
+function _buildUrlParams() {
+  const f = getFilters();
+  const p = new URLSearchParams();
+  if (f.formatid) p.set("format", f.formatid);
+  if (f.elo_min > 0) p.set("emin", f.elo_min);
+  if (f.elo_max < 10000) p.set("emax", f.elo_max);
+  if (activeView !== "pokemon") p.set("view", activeView);
+  if (f.q) p.set("q", f.q);
+  if (f.sort !== "popularity" || f.order !== "desc") { p.set("sort", f.sort); p.set("order", f.order); }
+  if (f.attack_sort !== "uses" || f.attack_order !== "desc") { p.set("asort", f.attack_sort); p.set("aorder", f.attack_order); }
+  if (f.team_sort !== "popularity" || f.team_order !== "desc") { p.set("tsort", f.team_sort); p.set("torder", f.team_order); }
+  if (f.selected_type) p.set("type", f.selected_type);
+  if (!activeViewState().min_games_auto) p.set("mg", f.min_games);
+  if (currentDetailState) p.set("detail", currentDetailState.key);
+  if (activeView === "teams") {
+    if (f.combo_size !== 6) p.set("cs", f.combo_size);
+    if (f.members_csv) p.set("members", f.members_csv);
+  }
+  return p;
+}
+function updateUrlState() {
+  const s = _buildUrlParams().toString();
+  history.replaceState(null, "", location.pathname + (s ? "?" + s : ""));
+}
+function readUrlParams() {
+  const p = new URLSearchParams(location.search);
+  return {
+    format: p.get("format"),
+    elo_min: p.has("emin") ? parseInt(p.get("emin"), 10) : null,
+    elo_max: p.has("emax") ? parseInt(p.get("emax"), 10) : null,
+    view: p.get("view") || null,
+    q: p.get("q"),
+    sort: p.get("sort"), order: p.get("order"),
+    attack_sort: p.get("asort"), attack_order: p.get("aorder"),
+    team_sort: p.get("tsort"), team_order: p.get("torder"),
+    type: p.get("type"),
+    min_games: p.has("mg") ? p.get("mg") : null,
+    detail: p.get("detail"),
+    combo_size: p.get("cs"),
+    members: p.get("members"),
+  };
+}
+async function applyUrlParams(u) {
+  if (u.format) {
+    const sel = el("formatid");
+    if ([...sel.options].some(o => o.value === u.format)) sel.value = u.format;
+  }
+  const smin = el("elo_min"), smax = el("elo_max");
+  if (u.elo_min !== null) smin.value = Math.max(parseInt(smin.min || "0", 10), u.elo_min);
+  if (u.elo_max !== null) smax.value = Math.min(parseInt(smax.max || "10000", 10), u.elo_max);
+  if (u.elo_min !== null || u.elo_max !== null) updateEloUI();
+  if (u.sort) sortState.key = u.sort;
+  if (u.order) sortState.order = u.order;
+  if (u.attack_sort) attackSortState.key = u.attack_sort;
+  if (u.attack_order) attackSortState.order = u.attack_order;
+  if (u.team_sort) teamSortState.key = u.team_sort;
+  if (u.team_order) teamSortState.order = u.team_order;
+  const targetView = u.view || "pokemon";
+  if (targetView !== activeView) setView(targetView);
+  if (u.type) typeFilterState[activeView] = u.type;
+  if (u.q !== null) { el("q").value = u.q; activeViewState().q = u.q; }
+  if (u.min_games !== null) {
+    el("min_games").value = u.min_games;
+    const s = activeViewState();
+    s.min_games = u.min_games;
+    s.min_games_auto = false;
+  }
+  if (u.combo_size) { el("combo_size").value = u.combo_size; viewSearchState.teams.combo_size = u.combo_size; }
+  if (u.members) {
+    const parts = u.members.split(",").slice(0, 5);
+    for (let i = 0; i < 5; i++) teamMemberFilters[i] = parts[i] || "";
+    viewSearchState.teams.members = [...teamMemberFilters];
+  }
+}
 
 async function initFormats() {
   const res = await fetch("/api/formats");
@@ -1446,6 +1523,7 @@ async function loadAttacks() {
   el("meta").textContent = `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${fmtInt(data.elo_min)}-${fmtInt(data.elo_max)} • ${t("matchesMeta")}: ${fmtInt(data.meta.matches)}`;
   renderAttackRows(Array.isArray(data.items) ? data.items : []);
   usedInitialAttacks = false;
+  updateUrlState();
 }
 
 function teamMembersHtml(members, comboSize, games, wins) {
@@ -1499,6 +1577,7 @@ async function loadTeams() {
     `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${fmtInt(data.elo_min)}-${fmtInt(data.elo_max)} • ${t("matchesMeta")}: ${fmtInt(data.meta.matches)}`;
   renderTeamRows(Array.isArray(data.items) ? data.items : [], f.combo_size);
   usedInitialTeams = false;
+  updateUrlState();
 }
 
 function typeIconsHtml(types) {
@@ -1657,6 +1736,7 @@ async function loadList() {
   }
   updateSortIndicators();
   usedInitialPokemon = false;
+  updateUrlState();
 }
 
 function miniRowHtml(x) {
@@ -2397,6 +2477,7 @@ async function loadDetail(key, nameHint, detailFilters = null) {
     bounds: detailState.bounds || null,
   };
   currentDetailState = { key, nameHint, ...f };
+  updateUrlState();
   const params = new URLSearchParams({
     formatid: f.formatid,
     elo_min: f.elo_min.toString(),
@@ -2773,7 +2854,34 @@ function initSortHeaders(){
   applyI18n();
   initSortHeaders();
   setView("pokemon");
-  if (!hydrateInitialState()) {
+
+  const urlState = readUrlParams();
+  const hasUrlState = location.search.length > 1;
+  const hydrated = hydrateInitialState();
+
+  if (hasUrlState) {
+    usedInitialPokemon = false;
+    usedInitialAttacks = false;
+    usedInitialTeams = false;
+    if (!hydrated) {
+      await initFormats();
+      await initEloBounds();
+    }
+    await applyUrlParams(urlState);
+    await initTypeFilters();
+    if (activeView === "attacks") {
+      await loadAttacks();
+    } else if (activeView === "teams") {
+      await ensurePokemonPickerOptions();
+      renderTeamMemberSlots();
+      await loadTeams();
+    } else {
+      await loadList();
+    }
+    if (urlState.detail) {
+      await loadDetail(urlState.detail, urlState.detail);
+    }
+  } else if (!hydrated) {
     await initFormats();
     await initEloBounds();
     await initTypeFilters();
