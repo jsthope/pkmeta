@@ -82,7 +82,7 @@
           </svg>
           <span>GitHub</span>
         </a>
-        <div class="muted" id="meta">Format: {{ home.formatid }} • Elo: {{ home.elo_min }}-{{ home.elo_max }} • Matches: {{ home.matches_display }}</div>
+        <div class="muted" id="meta">Format: {{ "Champions" if home.formatid == "champions" else home.formatid }} • Elo: {{ home.elo_min }}-{{ home.elo_max }} • Matches: {{ home.matches_display }}</div>
       </div>
     </header>
 
@@ -90,7 +90,7 @@
       <label><span id="lbl_format">Format</span>
         <select id="formatid">
           {% for format in home.formats %}
-          <option value="{{ format }}"{% if format == home.formatid %} selected{% endif %}>{{ format }}</option>
+          <option value="{{ format }}"{% if format == home.formatid %} selected{% endif %}>{{ "Champions" if format == "champions" else format }}</option>
           {% endfor %}
         </select>
       </label>
@@ -125,6 +125,8 @@
       </div>
       <div id="type_filter_wrap" class="typeFilter" aria-label="Type filter"></div>
     </div>
+
+    <div id="champions_warning" class="warningBanner" role="note"{% if home.formatid != "champions" %} hidden{% endif %}>{{ ui_i18n[server_lang].championsWarning if ui_i18n[server_lang] is defined and ui_i18n[server_lang].championsWarning is defined else ui_i18n['en'].championsWarning }}</div>
 
     <div id="panel_pokemon" class="tabPanel isActive">
       <div id="pokemon_winrate_warning" class="warningBanner" role="alert"{% if not home.pokemon_winrate_warning.show %} hidden{% endif %}>{{ home.pokemon_winrate_warning.message or '' }}</div>
@@ -623,6 +625,14 @@ function updatePokemonWinrateWarning(meta) {
   node.textContent = show ? String(warning.message) : "";
 }
 
+function updateChampionsWarning() {
+  const node = el("champions_warning");
+  if (!node) return;
+  const show = el("formatid").value === "champions";
+  node.hidden = !show;
+  if (show) node.textContent = t("championsWarning");
+}
+
 function resetAutoMinGamesForAllViews() {
   Object.values(viewSearchState).forEach((state) => {
     state.min_games_auto = true;
@@ -701,6 +711,7 @@ const typeOptionsCache = {
 };
 
 let pokemonPickerOptions = Array.isArray(INITIAL_STATE.pokemon_picker_options) ? INITIAL_STATE.pokemon_picker_options : null;
+let pokemonPickerOptionsCacheKey = `${currentLang}|${String(INITIAL_STATE.default_format || "all")}`;
 let activeTeamSlotIndex = -1;
 const teamMemberFilters = ["", "", "", "", ""];
 
@@ -726,6 +737,7 @@ function applyI18n() {
   el("lbl_team_members").textContent = t("teamFilter");
   el("team_picker_search").placeholder = t("searchPokemon");
   el("rules_notice").textContent = t("rulesNotice");
+  updateChampionsWarning();
   if (el("pokemon_winrate_warning").hidden !== true && !el("pokemon_winrate_warning").textContent) {
     updatePokemonWinrateWarning((INITIAL_STATE.pokemon || {}).winrate_warning || null);
   }
@@ -827,6 +839,15 @@ function typeIconUrl(typeName) {
   return `${TYPE_ICON_BASE}${slug}.svg`;
 }
 
+function formatLabel(formatid) {
+  const fmt = String(formatid || "");
+  return fmt === "champions" ? "Champions" : fmt;
+}
+
+function setMetaText(formatid, eloMin, eloMax, matches) {
+  el("meta").textContent = `${t("formatMeta")}: ${formatLabel(formatid)} • ${t("eloMeta")}: ${fmtInt(eloMin)}-${fmtInt(eloMax)} • ${t("matchesMeta")}: ${fmtInt(matches)}`;
+}
+
 function sanitizeTypes(types) {
   return (Array.isArray(types) ? types : []).filter(t => {
     const v = String(t || "").trim().toLowerCase();
@@ -894,16 +915,28 @@ function selectedTeamMemberKeys() {
   return teamMemberFilters.map(x => (x || "").trim()).filter(Boolean);
 }
 
-async function ensurePokemonPickerOptions() {
-  if (Array.isArray(pokemonPickerOptions)) return pokemonPickerOptions;
+async function ensurePokemonPickerOptions(formatid = "") {
+  const resolvedFormat = String(formatid || (el("formatid") && el("formatid").value) || INITIAL_STATE.default_format || "all");
+  const cacheKey = `${currentLang}|${resolvedFormat}`;
+  if (Array.isArray(pokemonPickerOptions) && pokemonPickerOptionsCacheKey === cacheKey) return pokemonPickerOptions;
   try {
-    const res = await fetch(`/api/pokemon_options?lang=${encodeURIComponent(currentLang)}`);
+    const res = await fetch(`/api/pokemon_options?lang=${encodeURIComponent(currentLang)}&formatid=${encodeURIComponent(resolvedFormat)}`);
     const data = await res.json();
     pokemonPickerOptions = Array.isArray(data.items) ? data.items : [];
+    pokemonPickerOptionsCacheKey = cacheKey;
   } catch (e) {
     pokemonPickerOptions = [];
+    pokemonPickerOptionsCacheKey = cacheKey;
   }
   return pokemonPickerOptions;
+}
+
+function pruneInvalidTeamMemberFilters() {
+  if (!Array.isArray(pokemonPickerOptions)) return;
+  const allowed = new Set(pokemonPickerOptions.map(option => option && option.key).filter(Boolean));
+  for (let i = 0; i < teamMemberFilters.length; i++) {
+    if (teamMemberFilters[i] && !allowed.has(teamMemberFilters[i])) teamMemberFilters[i] = "";
+  }
 }
 
 function pokemonPickerOptionByKey(key) {
@@ -912,6 +945,7 @@ function pokemonPickerOptionByKey(key) {
 }
 
 function renderTeamMemberSlots() {
+  pruneInvalidTeamMemberFilters();
   const wrap = el("team_member_slots");
   wrap.innerHTML = "";
   for (let i = 0; i < 5; i++) {
@@ -977,7 +1011,7 @@ async function openTeamPicker(index) {
   el("team_picker_list").innerHTML = `<div class="teamPickerEmpty">${escapeHtml(t("loadingDots"))}</div>`;
   el("team_picker_search").placeholder = t("searchPokemon");
   el("team_picker_search").value = "";
-  await ensurePokemonPickerOptions();
+  await ensurePokemonPickerOptions(el("formatid").value);
   renderTeamMemberSlots();
   renderTeamPickerList();
   requestAnimationFrame(() => el("team_picker_search").focus());
@@ -1169,7 +1203,7 @@ function matchesInitialWindow() {
 }
 
 function setDefaultMeta() {
-  el("meta").textContent = `${t("formatMeta")}: ${INITIAL_STATE.default_format} • ${t("eloMeta")}: ${fmtInt(INITIAL_STATE.elo_min)}-${fmtInt(INITIAL_STATE.elo_max)} • ${t("matchesMeta")}: ${fmtInt(INITIAL_STATE.matches)}`;
+  setMetaText(INITIAL_STATE.default_format, INITIAL_STATE.elo_min, INITIAL_STATE.elo_max, INITIAL_STATE.matches);
   updatePokemonWinrateWarning((INITIAL_STATE.pokemon || {}).winrate_warning || null);
 }
 
@@ -1405,6 +1439,7 @@ async function applyUrlParams(u) {
     const sel = el("formatid");
     if ([...sel.options].some(o => o.value === u.format)) sel.value = u.format;
   }
+  updateChampionsWarning();
   const smin = el("elo_min"), smax = el("elo_max");
   if (u.elo_min !== null) smin.value = Math.max(parseInt(smin.min || "0", 10), u.elo_min);
   if (u.elo_max !== null) smax.value = Math.min(parseInt(smax.max || "10000", 10), u.elo_max);
@@ -1442,10 +1477,11 @@ async function initFormats() {
   for (const f of data.formats) {
     const opt = document.createElement("option");
     opt.value = f;
-    opt.textContent = f;
+    opt.textContent = formatLabel(f);
     sel.appendChild(opt);
   }
-  if (data.formats.includes("gen9ou")) sel.value = "gen9ou";
+  if (data.formats.includes("champions")) sel.value = "champions";
+  else if (data.formats.includes("gen9ou")) sel.value = "gen9ou";
   else if (data.formats.includes("all")) sel.value = "all";
 }
 
@@ -1520,7 +1556,7 @@ async function loadAttacks() {
     await loadAttacks();
     return;
   }
-  el("meta").textContent = `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${fmtInt(data.elo_min)}-${fmtInt(data.elo_max)} • ${t("matchesMeta")}: ${fmtInt(data.meta.matches)}`;
+  setMetaText(data.formatid, data.elo_min, data.elo_max, data.meta.matches);
   renderAttackRows(Array.isArray(data.items) ? data.items : []);
   usedInitialAttacks = false;
   updateUrlState();
@@ -1573,8 +1609,7 @@ async function loadTeams() {
     return;
   }
 
-  el("meta").textContent =
-    `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${fmtInt(data.elo_min)}-${fmtInt(data.elo_max)} • ${t("matchesMeta")}: ${fmtInt(data.meta.matches)}`;
+  setMetaText(data.formatid, data.elo_min, data.elo_max, data.meta.matches);
   renderTeamRows(Array.isArray(data.items) ? data.items : [], f.combo_size);
   usedInitialTeams = false;
   updateUrlState();
@@ -1636,8 +1671,7 @@ async function loadList() {
     return;
   }
 
-  el("meta").textContent =
-    `${t("formatMeta")}: ${data.formatid} • ${t("eloMeta")}: ${fmtInt(data.elo_min)}-${fmtInt(data.elo_max)} • ${t("matchesMeta")}: ${fmtInt(data.meta.matches)}`;
+  setMetaText(data.formatid, data.elo_min, data.elo_max, data.meta.matches);
   updatePokemonWinrateWarning(data.meta || null);
 
   let items = Array.isArray(data.items) ? data.items : [];
@@ -2299,7 +2333,7 @@ function renderDetailPokemonPickerResults(query) {
 async function renderDetailPokemonPicker(state, displayName) {
   const mount = el("modalTitle");
   if (!mount) return;
-  await ensurePokemonPickerOptions();
+  await ensurePokemonPickerOptions(state.formatid);
   const shownName = displayName || state.nameHint || "";
   mount.innerHTML = `
     <div class="detailPokemonPicker">
@@ -2763,11 +2797,16 @@ el("lang_select").addEventListener("change", () => {
 el("formatid").addEventListener("change", async () => {
   saveSearchStateForView(activeView);
   resetAutoMinGamesForAllViews();
+  updateChampionsWarning();
   typeOptionsCache.pokemon = { key: "", types: [] };
   typeOptionsCache.attacks = { key: "", types: [] };
   typeOptionsCache.teams = { key: "", types: [] };
+  pokemonPickerOptions = null;
+  pokemonPickerOptionsCacheKey = "";
   hasPrewarmedDetail = false;
   await initEloBounds();
+  await ensurePokemonPickerOptions(el("formatid").value);
+  renderTeamMemberSlots();
   applyCachedMinGamesForActiveView();
   await initTypeFilters();
   if (activeView === "pokemon") await loadList();
@@ -2799,7 +2838,7 @@ el("tab_attacks").addEventListener("click", async () => {
 });
 el("tab_teams").addEventListener("click", async () => {
   setView("teams");
-  await ensurePokemonPickerOptions();
+  await ensurePokemonPickerOptions(el("formatid").value);
   renderTeamMemberSlots();
   await initTypeFilters();
   await loadTeams();
@@ -2872,7 +2911,7 @@ function initSortHeaders(){
     if (activeView === "attacks") {
       await loadAttacks();
     } else if (activeView === "teams") {
-      await ensurePokemonPickerOptions();
+      await ensurePokemonPickerOptions(el("formatid").value);
       renderTeamMemberSlots();
       await loadTeams();
     } else {

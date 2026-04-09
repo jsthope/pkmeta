@@ -80,11 +80,59 @@ _MOVE_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
 _ITEM_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
 _ABILITY_LOCALIZED_NAME_CACHE: Dict[str, Dict[str, str]] = {}
 _POKEMON_PICKER_OPTION_CACHE: Dict[str, List[Dict[str, Any]]] = {}
-DEFAULT_HOME_FORMAT = "gen9ou"
+DEFAULT_HOME_FORMAT = "champions"
 DEFAULT_HOME_LIMIT = 50
 DEFAULT_MIN_USAGE_RATE = 0.005
 DEFAULT_HOME_TEAM_SIZE = 6
 DEFAULT_TEAM_MIN_GAMES = 100
+SPECIAL_FORMAT_CHAMPIONS = "champions"
+SPECIAL_FORMAT_BASE = {SPECIAL_FORMAT_CHAMPIONS: "all"}
+# Snapshot of Bulbapedia's Pokemon Champions list, including regional forms,
+# Mega Evolutions, and the other forms listed on the same page.
+CHAMPIONS_ALLOWED_POKEMON_KEYS = frozenset(
+    """
+    venusaur charizard blastoise beedrill pidgeot arbok pikachu raichu raichualola clefable
+    ninetales ninetalesalola arcanine arcaninehisui alakazam machamp victreebel slowbro slowbrogalar
+    gengar kangaskhan starmie pinsir tauros taurospaldeaaqua taurospaldeablaze taurospaldeacombat
+    gyarados ditto vaporeon jolteon flareon aerodactyl snorlax dragonite meganium typhlosion
+    typhlosionhisui feraligatr ariados ampharos azumarill politoed espeon umbreon slowking
+    slowkinggalar forretress steelix scizor heracross skarmory houndoom tyranitar pelipper gardevoir
+    sableye aggron medicham manectric sharpedo camerupt torkoal altaria milotic castform banette
+    chimecho absol glalie torterra infernape empoleon luxray roserade rampardos bastiodon lopunny
+    spiritomb garchomp lucario hippowdon toxicroak abomasnow weavile rhyperior leafeon glaceon
+    gliscor mamoswine gallade froslass rotom serperior emboar samurott samurotthisui watchog
+    liepard simisage simisear simipour excadrill audino conkeldurr whimsicott krookodile cofagrigus
+    garbodor zoroark zoroarkhisui reuniclus vanilluxe emolga chandelure beartic stunfisk
+    stunfiskgalar golurk hydreigon volcarona chesnaught delphox greninja diggersby talonflame
+    vivillon floetteeternal florges pangoro furfrou meowstic aegislash aromatisse slurpuff
+    clawitzer heliolisk tyrantrum aurorus sylveon hawlucha dedenne goodra goodrahisui klefki
+    trevenant gourgeist avalugg avalugghisui noivern decidueye decidueyehisui incineroar primarina
+    toucannon crabominable lycanroc toxapex mudsdale araquanid salazzle tsareena oranguru passimian
+    mimikyu drampa kommoo corviknight flapple appletun sandaconda polteageist hatterene mrrime
+    runerigus alcremie morpeko dragapult wyrdeer kleavor basculegion sneasler meowscarada
+    skeledirge quaquaval maushold mausholdfour garganacl armarouge ceruledge bellibolt scovillain
+    espathra tinkaton palafin orthworm glimmora farigiraf kingambit sinistcha archaludon hydrapple
+    venusaurmega charizardmegax charizardmegay blastoisemega beedrillmega pidgeotmega clefablemega
+    alakazammega victreebelmega slowbromega gengarmega kangaskhanmega starmiemega pinsirmega
+    gyaradosmega aerodactylmega dragonitemega meganiummega feraligatrmega ampharosmega steelixmega
+    scizormega heracrossmega skarmorymega houndoommega tyranitarmega gardevoirmega sableyemega
+    aggronmega medichammega manectricmega sharpedomega cameruptmega altariamega banettemega
+    chimechomega absolmega glaliemega lopunnymega garchompmega lucariomega abomasnowmega
+    gallademega froslassmega emboarmega excadrillmega audinomega chandeluremega golurkmega
+    chesnaughtmega delphoxmega greninjamega floettemega hawluchamega crabominablemega drampamega
+    scovillainmega glimmoramega castformsunny castformrainy castformsnowy rotomheat rotomwash
+    rotomfrost rotomfan rotommow vivillonicysnow vivillonpolar vivillontundra vivilloncontinental
+    vivillongarden vivillonelegant vivillonmodern vivillonmarine vivillonarchipelago
+    vivillonhighplains vivillonsandstorm vivillonriver vivillonmonsoon vivillonsavanna vivillonsun
+    vivillonocean vivillonjungle vivillonfancy vivillonpokeball furfrouheart furfroustar
+    furfroudiamond furfroudebutante furfroumatron furfroudandy furfroulareine furfroukabuki
+    furfroupharaoh meowsticf aegislashblade gourgeistsmall gourgeistlarge gourgeistsuper
+    lycanrocmidnight lycanrocdusk alcremierubycream alcremiematchacream alcremiemintcream
+    alcremielemoncream alcremiesaltedcream alcremierubyswirl alcremiecaramelswirl
+    alcremierainbowswirl morpekohangry basculegionf palafinhero
+    """.split()
+)
+CHAMPIONS_ALLOWED_POKEMON_KEY_LIST = tuple(sorted(CHAMPIONS_ALLOWED_POKEMON_KEYS))
 _PICKER_MERGE_TO_BASE = {"minior", "florges", "squawkabilly", "pikachu"}
 DATASET_SOURCE_NAME = "pokemon-showdown-replays"
 DATASET_SOURCE_URL = "https://huggingface.co/datasets/HolidayOugi/pokemon-showdown-replays"
@@ -198,6 +246,30 @@ def _to_id(s: str) -> str:
     t = unicodedata.normalize("NFKD", (s or ""))
     t = "".join(c for c in t if not unicodedata.combining(c))
     return _TOID_RE.sub("", t.lower())
+
+
+def _format_db_id(formatid: str) -> str:
+    fmt = (formatid or "all").strip().lower()
+    return SPECIAL_FORMAT_BASE.get(fmt, fmt)
+
+
+def _special_format_allowed_keys(formatid: str) -> Optional[Set[str]]:
+    fmt = (formatid or "").strip().lower()
+    if fmt == SPECIAL_FORMAT_CHAMPIONS:
+        return CHAMPIONS_ALLOWED_POKEMON_KEYS
+    return None
+
+
+def _special_format_allowed_key_list(formatid: str) -> tuple[str, ...]:
+    fmt = (formatid or "").strip().lower()
+    if fmt == SPECIAL_FORMAT_CHAMPIONS:
+        return CHAMPIONS_ALLOWED_POKEMON_KEY_LIST
+    return ()
+
+
+def _is_pokemon_allowed_for_format(formatid: str, key: str) -> bool:
+    allowed_keys = _special_format_allowed_keys(formatid)
+    return allowed_keys is None or _to_id(key) in allowed_keys
 
 
 def _read_text_url(url: str) -> str:
@@ -564,6 +636,7 @@ def _recommended_team_min_games(matches: int) -> int:
 
 
 def _pokemon_winrate_warning_meta(db_path: str, formatid: str, elo_min: int, elo_max: int) -> Dict[str, Any]:
+    db_formatid = _format_db_id(formatid)
     conn = get_conn(db_path)
     try:
         row = conn.execute(
@@ -573,7 +646,7 @@ def _pokemon_winrate_warning_meta(db_path: str, formatid: str, elo_min: int, elo
               COALESCE((SELECT SUM(brought) FROM pokemon_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?), 0) AS brought,
               COALESCE((SELECT SUM(wins) FROM pokemon_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?), 0) AS wins
             """,
-            (formatid, elo_min, elo_max, formatid, elo_min, elo_max, formatid, elo_min, elo_max),
+            (db_formatid, elo_min, elo_max, db_formatid, elo_min, elo_max, db_formatid, elo_min, elo_max),
         ).fetchone()
     finally:
         conn.close()
@@ -599,11 +672,12 @@ def _pokemon_winrate_warning_meta(db_path: str, formatid: str, elo_min: int, elo
 
 
 def _matches_for_window(db_path: str, formatid: str, elo_min: int, elo_max: int) -> int:
+    db_formatid = _format_db_id(formatid)
     conn = get_conn(db_path)
     try:
         row = conn.execute(
             "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
-            (formatid, elo_min, elo_max),
+            (db_formatid, elo_min, elo_max),
         ).fetchone()
     finally:
         conn.close()
@@ -611,10 +685,11 @@ def _matches_for_window(db_path: str, formatid: str, elo_min: int, elo_max: int)
 
 
 def _resolve_teams_db_path(teams_db_path: str, formatid: str) -> Optional[str]:
+    db_formatid = _format_db_id(formatid)
     if not teams_db_path:
         return None
     if os.path.isdir(teams_db_path):
-        candidate = os.path.join(teams_db_path, f"{formatid}.sqlite")
+        candidate = os.path.join(teams_db_path, f"{db_formatid}.sqlite")
         return candidate if os.path.exists(candidate) else None
     return teams_db_path if os.path.exists(teams_db_path) else None
 
@@ -689,9 +764,11 @@ def _picker_key_and_name(key: str, name: str) -> Tuple[str, str]:
     return (clean_key, clean_name)
 
 
-def _pokemon_picker_options(lang: str) -> List[Dict[str, Any]]:
+def _pokemon_picker_options(lang: str, formatid: str = "") -> List[Dict[str, Any]]:
     lang_norm = _normalize_lang(lang)
-    cached = _POKEMON_PICKER_OPTION_CACHE.get(lang_norm)
+    format_norm = (formatid or "").strip().lower()
+    cache_key = f"{lang_norm}|{format_norm}"
+    cached = _POKEMON_PICKER_OPTION_CACHE.get(cache_key)
     if cached is not None:
         return cached
 
@@ -718,8 +795,11 @@ def _pokemon_picker_options(lang: str) -> List[Dict[str, Any]]:
         }
 
     options = list(options_by_key.values())
+    allowed_keys = _special_format_allowed_keys(format_norm)
+    if allowed_keys is not None:
+        options = [opt for opt in options if str(opt.get("key") or "") in allowed_keys]
     options.sort(key=lambda x: (_to_id(x["localized_name"]), _to_id(x["name"])))
-    _POKEMON_PICKER_OPTION_CACHE[lang_norm] = options
+    _POKEMON_PICKER_OPTION_CACHE[cache_key] = options
     return options
 
 
@@ -729,7 +809,10 @@ def _available_formats(db_path: str) -> List[str]:
         rows = conn.execute("SELECT DISTINCT formatid FROM matches_bucket ORDER BY formatid").fetchall()
     finally:
         conn.close()
-    return [str(r["formatid"]) for r in rows if r["formatid"] is not None]
+    formats = [str(r["formatid"]) for r in rows if r["formatid"] is not None]
+    if "all" in formats and SPECIAL_FORMAT_CHAMPIONS not in formats:
+        formats = [SPECIAL_FORMAT_CHAMPIONS, *formats]
+    return formats
 
 
 def _default_home_format(formats: List[str]) -> str:
@@ -741,11 +824,12 @@ def _default_home_format(formats: List[str]) -> str:
 
 
 def _elo_bounds_for_format(db_path: str, formatid: str) -> Dict[str, int]:
+    db_formatid = _format_db_id(formatid)
     conn = get_conn(db_path)
     try:
         row = conn.execute(
             "SELECT MIN(elo_bucket) AS mn, MAX(elo_bucket) AS mx FROM matches_bucket WHERE formatid=?",
-            (formatid,),
+            (db_formatid,),
         ).fetchone()
     finally:
         conn.close()
@@ -765,18 +849,19 @@ def _home_pokemon_rows(
     elo_min: int,
     elo_max: int,
 ) -> Dict[str, Any]:
+    db_formatid = _format_db_id(formatid)
+    allowed_keys = _special_format_allowed_key_list(formatid)
     conn = get_conn(db_path)
     try:
         matches_row = conn.execute(
             "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
-            (formatid, elo_min, elo_max),
+            (db_formatid, elo_min, elo_max),
         ).fetchone()
         denom_row = conn.execute(
             "SELECT COALESCE(SUM(games),0) AS s FROM pokemon_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
-            (formatid, elo_min, elo_max),
+            (db_formatid, elo_min, elo_max),
         ).fetchone()
-        rows = conn.execute(
-            """
+        query_sql = """
             SELECT
               key,
               MIN(name) AS name,
@@ -791,13 +876,20 @@ def _home_pokemon_rows(
               SUM(dmg_taken) AS dmg_taken
             FROM pokemon_bucket
             WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
+        """
+        params: List[Any] = [db_formatid, elo_min, elo_max]
+        if allowed_keys:
+            qs = ",".join("?" for _ in allowed_keys)
+            query_sql += f" AND key IN ({qs})"
+            params.extend(allowed_keys)
+        query_sql += """
             GROUP BY key
             HAVING SUM(games) >= ?
             ORDER BY SUM(games) DESC
             LIMIT ?
-            """,
-            (formatid, elo_min, elo_max, min_games, limit),
-        ).fetchall()
+        """
+        params.extend([min_games, limit])
+        rows = conn.execute(query_sql, params).fetchall()
     finally:
         conn.close()
 
@@ -855,18 +947,23 @@ def _default_type_options(
 ) -> List[str]:
     type_counts: Dict[str, int] = {}
     poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+    db_formatid = _format_db_id(formatid)
+    allowed_keys = _special_format_allowed_key_list(formatid)
 
     conn = get_conn(db_path)
     try:
-        rows = conn.execute(
-            """
+        query_sql = """
             SELECT key, SUM(games) AS games
             FROM pokemon_bucket
             WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
-            GROUP BY key
-            """,
-            (formatid, elo_min, elo_max),
-        ).fetchall()
+        """
+        params: List[Any] = [db_formatid, elo_min, elo_max]
+        if allowed_keys:
+            qs = ",".join("?" for _ in allowed_keys)
+            query_sql += f" AND key IN ({qs})"
+            params.extend(allowed_keys)
+        query_sql += " GROUP BY key"
+        rows = conn.execute(query_sql, params).fetchall()
     finally:
         conn.close()
 
@@ -885,7 +982,7 @@ def _default_type_options(
             WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
             GROUP BY move_type
             """,
-            (formatid, elo_min, elo_max),
+            (db_formatid, elo_min, elo_max),
         ).fetchall()
         for r in rows2:
             t = _normalize_type(str(r["move_type"]))
@@ -920,12 +1017,13 @@ def _attack_items_payload(
     qraw = (q or "").strip().lower()
     qid = _to_id(qraw)
     lang_norm = _normalize_lang(lang)
+    db_formatid = _format_db_id(formatid)
 
     conn = get_conn(attacks_db_path)
     try:
         matches_row = conn.execute(
             "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
-            (formatid, elo_min, elo_max),
+            (db_formatid, elo_min, elo_max),
         ).fetchone()
 
         q_sql = """
@@ -940,7 +1038,7 @@ def _attack_items_payload(
         FROM move_bucket
         WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
         """
-        params: List[Any] = [formatid, elo_min, elo_max]
+        params: List[Any] = [db_formatid, elo_min, elo_max]
         if selected_types:
             qs = ",".join("?" for _ in selected_types)
             q_sql += f" AND move_type IN ({qs})"
@@ -1118,7 +1216,7 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
                 "winrate_warning": pokemon_winrate_warning,
             },
             "attacks": {"min_games": default_min_games, "sort": "uses", "order": "desc", "preloaded": True, "min_games_auto": True},
-            "teams": {
+        "teams": {
                 "min_games": default_team_min_games,
                 "sort": "popularity",
                 "order": "desc",
@@ -1127,7 +1225,7 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
                 "min_games_auto": True,
                 "by_size": team_rows_by_size,
             },
-            "pokemon_picker_options": _pokemon_picker_options(lang),
+            "pokemon_picker_options": _pokemon_picker_options(lang, formatid),
             "limit": DEFAULT_HOME_LIMIT,
         },
     }
@@ -1196,6 +1294,8 @@ def _populate_team_query_cache(
     elo_min: int,
     elo_max: int,
 ) -> int:
+    db_formatid = _format_db_id(formatid)
+    allowed_keys = _special_format_allowed_keys(formatid)
     meta_row = conn.execute(
         """
         SELECT matches
@@ -1209,7 +1309,7 @@ def _populate_team_query_cache(
 
     matches_row = conn.execute(
         "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
-        (formatid, elo_min, elo_max),
+        (db_formatid, elo_min, elo_max),
     ).fetchone()
     matches = int(matches_row["m"]) if matches_row else 0
 
@@ -1220,8 +1320,14 @@ def _populate_team_query_cache(
         WHERE formatid=? AND combo_size=? AND elo_bucket BETWEEN ? AND ?
         GROUP BY combo_key
         """,
-        (formatid, combo_size, elo_min, elo_max),
+        (db_formatid, combo_size, elo_min, elo_max),
     ).fetchall()
+    if allowed_keys is not None:
+        rows = [
+            r
+            for r in rows
+            if all(member in allowed_keys for member in str(r["combo_key"]).split("|") if member)
+        ]
 
     identity_map = load_pokedex_identity_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
     poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
@@ -1756,22 +1862,17 @@ def make_app(
 
     @app.get("/api/formats")
     def api_formats():
-        conn = get_conn(db_path)
-        try:
-            rows = conn.execute("SELECT DISTINCT formatid FROM matches_bucket ORDER BY formatid").fetchall()
-        finally:
-            conn.close()
-        formats = [r["formatid"] for r in rows]
-        return jsonify({"formats": formats})
+        return jsonify({"formats": _available_formats(db_path)})
 
     @app.get("/api/elo_bounds")
     def api_elo_bounds():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        db_formatid = _format_db_id(formatid)
         conn = get_conn(db_path)
         try:
             row = conn.execute(
                 "SELECT MIN(elo_bucket) AS mn, MAX(elo_bucket) AS mx FROM matches_bucket WHERE formatid=?",
-                (formatid,),
+                (db_formatid,),
             ).fetchone()
         finally:
             conn.close()
@@ -1782,6 +1883,8 @@ def make_app(
     @app.get("/api/types")
     def api_types():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        db_formatid = _format_db_id(formatid)
+        allowed_keys = _special_format_allowed_key_list(formatid)
         elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
         elo_max = clamp_int(request.args.get("elo_max", 10000), 0, 10000)
         if elo_min > elo_max:
@@ -1791,15 +1894,18 @@ def make_app(
         poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
 
         conn = get_conn(db_path)
-        rows = conn.execute(
-            """
+        query_sql = """
             SELECT key, SUM(games) AS games
             FROM pokemon_bucket
             WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
-            GROUP BY key
-            """,
-            (formatid, elo_min, elo_max),
-        ).fetchall()
+        """
+        params: List[Any] = [db_formatid, elo_min, elo_max]
+        if allowed_keys:
+            qs = ",".join("?" for _ in allowed_keys)
+            query_sql += f" AND key IN ({qs})"
+            params.extend(allowed_keys)
+        query_sql += " GROUP BY key"
+        rows = conn.execute(query_sql, params).fetchall()
         conn.close()
 
         for r in rows:
@@ -1817,7 +1923,7 @@ def make_app(
                 WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
                 GROUP BY move_type
                 """,
-                (formatid, elo_min, elo_max),
+                (db_formatid, elo_min, elo_max),
             ).fetchall()
             for r in rows2:
                 t = _normalize_type(str(r["move_type"]))
@@ -1838,6 +1944,8 @@ def make_app(
     @app.get("/api/pokemon")
     def api_pokemon():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        db_formatid = _format_db_id(formatid)
+        allowed_keys = _special_format_allowed_key_list(formatid)
         q = (request.args.get("q", "") or "").strip().lower()
         qraw = q
         qid = _to_id(q)
@@ -1856,15 +1964,14 @@ def make_app(
         try:
             matches_row = conn.execute(
                 "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
-                (formatid, elo_min, elo_max),
+                (db_formatid, elo_min, elo_max),
             ).fetchone()
             matches = int(matches_row["m"]) if matches_row else 0
             min_games_default = _recommended_min_games_from_matches(matches)
             min_games = clamp_int(request.args.get("min_games", min_games_default), 0, 10_000_000)
             winrate_warning = _pokemon_winrate_warning_meta(db_path, formatid, elo_min, elo_max)
 
-            rows = conn.execute(
-                """
+            query_sql = """
                 SELECT
                   key,
                   MIN(name) AS name,
@@ -1879,11 +1986,18 @@ def make_app(
                   SUM(dmg_taken) AS dmg_taken
                 FROM pokemon_bucket
                 WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
+            """
+            params: List[Any] = [db_formatid, elo_min, elo_max]
+            if allowed_keys:
+                qs = ",".join("?" for _ in allowed_keys)
+                query_sql += f" AND key IN ({qs})"
+                params.extend(allowed_keys)
+            query_sql += """
                 GROUP BY key
                 HAVING SUM(games) >= ?
-                """,
-                (formatid, elo_min, elo_max, min_games),
-            ).fetchall()
+            """
+            params.append(min_games)
+            rows = conn.execute(query_sql, params).fetchall()
         finally:
             conn.close()
         poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
@@ -1986,11 +2100,15 @@ def make_app(
     @app.get("/api/pokemon_options")
     def api_pokemon_options():
         lang = _normalize_lang(request.args.get("lang", "en") or "en")
-        return jsonify({"items": _pokemon_picker_options(lang)})
+        formatid = (request.args.get("formatid", "") or "").strip().lower()
+        return jsonify({"items": _pokemon_picker_options(lang, formatid)})
 
     @app.get("/api/pokemon/<key>/detail")
     def api_pokemon_detail(key: str):
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        db_formatid = _format_db_id(formatid)
+        if not _is_pokemon_allowed_for_format(formatid, key):
+            return jsonify({"error": "not found"}), 404
         lang = _normalize_lang(request.args.get("lang", "en") or "en")
         elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
         elo_max = clamp_int(request.args.get("elo_max", 10000), 0, 10000)
@@ -2001,7 +2119,7 @@ def make_app(
         try:
             matches_row = conn.execute(
                 "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
-                (formatid, elo_min, elo_max),
+                (db_formatid, elo_min, elo_max),
             ).fetchone()
             matches = int(matches_row["m"]) if matches_row else 0
             min_synergy_games_default = _recommended_min_games_from_matches(matches)
@@ -2024,7 +2142,7 @@ def make_app(
                 FROM pokemon_bucket
                 WHERE formatid=? AND elo_bucket BETWEEN ? AND ? AND key=?
                 """,
-                (formatid, elo_min, elo_max, key),
+                (db_formatid, elo_min, elo_max, key),
             ).fetchone()
     
             if not base or base["games"] is None:
@@ -2062,7 +2180,7 @@ def make_app(
                         GROUP BY d.day
                         ORDER BY d.day ASC
                         """,
-                        (formatid, key, elo_min, elo_max),
+                        (db_formatid, key, elo_min, elo_max),
                     ).fetchall()
                 else:
                     ser_rows = conn.execute(
@@ -2074,7 +2192,7 @@ def make_app(
                         GROUP BY d.day
                         ORDER BY d.day ASC
                         """,
-                        (formatid, key),
+                        (db_formatid, key),
                     ).fetchall()
             except sqlite3.OperationalError:
                 ser_rows = []
@@ -2108,9 +2226,9 @@ def make_app(
                 WHERE formatid=? AND elo_bucket BETWEEN ? AND ? AND (a=? OR b=?)
                 GROUP BY a, b
                 """,
-                (formatid, elo_min, elo_max, key, key),
+                (db_formatid, elo_min, elo_max, key, key),
             ).fetchall()
-    
+
             mates = []
             for r in mate_rows:
                 g = int(r["g"])
@@ -2120,6 +2238,8 @@ def make_app(
                 a = str(r["a"])
                 b = str(r["b"])
                 other = b if a == key else a
+                if not _is_pokemon_allowed_for_format(formatid, other):
+                    continue
                 wr = w / g if g else 0.0
                 score = wilson_lower_bound(w, g)
                 mates.append((score, other, g, wr))
@@ -2134,7 +2254,7 @@ def make_app(
                 WHERE formatid=? AND elo_bucket BETWEEN ? AND ? AND a=?
                 GROUP BY b
                 """,
-                (formatid, elo_min, elo_max, key),
+                (db_formatid, elo_min, elo_max, key),
             ).fetchall()
     
             counters = []
@@ -2144,6 +2264,8 @@ def make_app(
                     continue
                 w = int(r["w"])
                 b = str(r["b"])
+                if not _is_pokemon_allowed_for_format(formatid, b):
+                    continue
                 wr = w / g if g else 0.0
                 if wr >= 0.5:
                     continue
@@ -2166,7 +2288,7 @@ def make_app(
                     WHERE formatid=? AND key IN ({qs})
                     GROUP BY key
                     """,
-                    (formatid, *other_keys),
+                    (db_formatid, *other_keys),
                 ).fetchall()
                 name_map = {str(r["key"]): str(r["name"]) for r in rows_nm if r["name"] is not None}
     
@@ -2183,15 +2305,19 @@ def make_app(
             available_formats = [str(r["formatid"]) for r in format_rows if r["formatid"] is not None]
             if available_formats:
                 available_formats = ["all", *available_formats]
-    
+            else:
+                available_formats = ["all"]
+            if _is_pokemon_allowed_for_format(SPECIAL_FORMAT_CHAMPIONS, key):
+                available_formats = [SPECIAL_FORMAT_CHAMPIONS, *available_formats]
+
             moves_rows = conn.execute(
                 "SELECT move, uses FROM pokemon_moves WHERE formatid=? AND key=? ORDER BY uses DESC",
-                (formatid, key),
+                (db_formatid, key),
             ).fetchall()
-    
+
             items_rows = conn.execute(
                 "SELECT item, uses FROM pokemon_items WHERE formatid=? AND key=? ORDER BY uses DESC",
-                (formatid, key),
+                (db_formatid, key),
             ).fetchall()
     
             abilities_map = load_pokedex_abilities_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
@@ -2203,7 +2329,7 @@ def make_app(
             try:
                 ab_rows = conn.execute(
                     "SELECT ability, uses FROM pokemon_abilities WHERE formatid=? AND key=? ORDER BY uses DESC",
-                    (formatid, key),
+                    (db_formatid, key),
                 ).fetchall()
                 if expected_set:
                     ab_rows = [r for r in ab_rows if str(r["ability"]) in expected_set]
@@ -2343,6 +2469,7 @@ def make_app(
     @app.get("/api/attack_types")
     def api_attack_types():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        db_formatid = _format_db_id(formatid)
         elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
         elo_max = clamp_int(request.args.get("elo_max", 10000), 0, 10000)
         if elo_min > elo_max:
@@ -2358,7 +2485,7 @@ def make_app(
                 GROUP BY move_type
                 ORDER BY games DESC, move_type ASC
                 """,
-                (formatid, elo_min, elo_max),
+                (db_formatid, elo_min, elo_max),
             ).fetchall()
         except sqlite3.OperationalError:
             return jsonify({"types": []})
@@ -2370,6 +2497,7 @@ def make_app(
     @app.get("/api/attacks")
     def api_attacks():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        db_formatid = _format_db_id(formatid)
         q = (request.args.get("q", "") or "").strip().lower()
         qraw = q
         qid = _to_id(q)
@@ -2388,7 +2516,7 @@ def make_app(
         try:
             matches_row = conn.execute(
                 "SELECT COALESCE(SUM(matches),0) AS m FROM matches_bucket WHERE formatid=? AND elo_bucket BETWEEN ? AND ?",
-                (formatid, elo_min, elo_max),
+                (db_formatid, elo_min, elo_max),
             ).fetchone()
             matches = int(matches_row["m"]) if matches_row else 0
             min_games_default = _recommended_min_games_from_matches(matches)
@@ -2406,7 +2534,7 @@ def make_app(
             FROM move_bucket
             WHERE formatid=? AND elo_bucket BETWEEN ? AND ?
             """
-            params: List[Any] = [formatid, elo_min, elo_max]
+            params: List[Any] = [db_formatid, elo_min, elo_max]
             if selected_types:
                 qs = ",".join("?" for _ in selected_types)
                 q_sql += f" AND move_type IN ({qs})"
