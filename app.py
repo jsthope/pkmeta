@@ -514,6 +514,10 @@ def _clean_champions_link_value(value: str) -> str:
         return ""
     if raw.lower() == "discord submission":
         return ""
+    if raw.startswith("//"):
+        return f"https:{raw}"
+    if not re.match(r"^[a-z][a-z0-9+.-]*://", raw, re.I) and re.match(r"^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:[/?#].*)?$", raw, re.I):
+        return f"https://{raw}"
     return raw
 
 
@@ -1788,6 +1792,9 @@ def _attack_items_payload(
 def _champions_home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
     formats = _available_formats(db_path)
     footer_copy = _footer_copy_for_lang(lang)
+    raw = _champions_sheet_raw_data()
+    team_count = int(raw.get("team_count") or 0)
+    champions_limit = team_count if team_count > 0 else DEFAULT_HOME_LIMIT
     teams = _champions_team_payload(
         formatid=SPECIAL_FORMAT_CHAMPIONS,
         q="",
@@ -1796,7 +1803,7 @@ def _champions_home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
         required_member_keys=[],
         sort="date",
         order="desc",
-        limit=DEFAULT_HOME_LIMIT,
+        limit=champions_limit,
     )
     pokemon = _champions_pokemon_payload(
         formatid=SPECIAL_FORMAT_CHAMPIONS,
@@ -1806,7 +1813,7 @@ def _champions_home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
         sort="games",
         order="desc",
         min_games=0,
-        limit=DEFAULT_HOME_LIMIT,
+        limit=champions_limit,
     )
     items = _champions_items_payload(
         formatid=SPECIAL_FORMAT_CHAMPIONS,
@@ -1816,9 +1823,8 @@ def _champions_home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
         sort="uses",
         order="desc",
         min_games=0,
-        limit=DEFAULT_HOME_LIMIT,
+        limit=champions_limit,
     )
-    raw = _champions_sheet_raw_data()
     team_rows_by_size = {str(DEFAULT_HOME_TEAM_SIZE): teams["items"]}
     return {
         "formats": formats,
@@ -1826,11 +1832,12 @@ def _champions_home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
         "elo_min": 0,
         "elo_max": 0,
         "elo_step": 1,
-        "matches": int(raw.get("team_count") or 0),
-        "matches_display": _human_int(int(raw.get("team_count") or 0)),
+        "matches": team_count,
+        "matches_display": _human_int(team_count),
         "min_games": 0,
         "min_games_display": "0",
-        "limit": DEFAULT_HOME_LIMIT,
+        "limit": champions_limit,
+        "limit_max": champions_limit,
         "rows": pokemon["items"],
         "attack_rows": items["items"],
         "team_rows": teams["items"],
@@ -1847,29 +1854,32 @@ def _champions_home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
             "elo_max": 0,
             "elo_step": 1,
             "types": list(raw.get("types") or []),
-            "matches": int(raw.get("team_count") or 0),
+            "matches": team_count,
             "active_view": "teams",
             "champions_mode": True,
             "pokemon": {
                 "min_games": 0,
                 "sort": "games",
                 "order": "desc",
+                "limit": champions_limit,
                 "preloaded": True,
                 "min_games_auto": True,
                 "winrate_warning": {"show": False, "message": ""},
             },
-            "attacks": {"min_games": 0, "sort": "uses", "order": "desc", "preloaded": True, "min_games_auto": True},
+            "attacks": {"min_games": 0, "sort": "uses", "order": "desc", "limit": champions_limit, "preloaded": True, "min_games_auto": True},
             "teams": {
                 "min_games": 0,
                 "sort": "date",
                 "order": "desc",
+                "limit": champions_limit,
                 "combo_size": DEFAULT_HOME_TEAM_SIZE,
                 "preloaded": True,
                 "min_games_auto": True,
                 "by_size": team_rows_by_size,
             },
             "pokemon_picker_options": _pokemon_picker_options(lang, SPECIAL_FORMAT_CHAMPIONS),
-            "limit": DEFAULT_HOME_LIMIT,
+            "limit": champions_limit,
+            "limit_max": champions_limit,
         },
     }
 
@@ -1944,6 +1954,7 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
         "min_games": default_min_games,
         "min_games_display": _human_int(default_min_games),
         "limit": DEFAULT_HOME_LIMIT,
+        "limit_max": 2000,
         "rows": pokemon["items"],
         "attack_rows": attacks["items"],
         "team_rows": team_rows_by_size[str(DEFAULT_HOME_TEAM_SIZE)],
@@ -1967,15 +1978,17 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
                 "min_games": default_min_games,
                 "sort": "popularity",
                 "order": "desc",
+                "limit": DEFAULT_HOME_LIMIT,
                 "preloaded": True,
                 "min_games_auto": True,
                 "winrate_warning": pokemon_winrate_warning,
             },
-            "attacks": {"min_games": default_min_games, "sort": "uses", "order": "desc", "preloaded": True, "min_games_auto": True},
-        "teams": {
+            "attacks": {"min_games": default_min_games, "sort": "uses", "order": "desc", "limit": DEFAULT_HOME_LIMIT, "preloaded": True, "min_games_auto": True},
+            "teams": {
                 "min_games": default_team_min_games,
                 "sort": "popularity",
                 "order": "desc",
+                "limit": DEFAULT_HOME_LIMIT,
                 "combo_size": DEFAULT_HOME_TEAM_SIZE,
                 "preloaded": True,
                 "min_games_auto": True,
@@ -1983,6 +1996,7 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
             },
             "pokemon_picker_options": _pokemon_picker_options(lang, formatid),
             "limit": DEFAULT_HOME_LIMIT,
+            "limit_max": 2000,
         },
     }
 

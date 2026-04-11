@@ -926,6 +926,7 @@ body[data-champions-mode="true"] .pokeSpriteFrame::after{
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  align-items: center;
 }
 
 .teamMemberChip,

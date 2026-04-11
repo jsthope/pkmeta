@@ -25,6 +25,21 @@
   <link rel="shortcut icon" href="/static/favicon.ico?v=20260411b"/>
   <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon-180.png?v=20260411b"/>
   <link rel="stylesheet" href="/static/style.css?v=20260411a">
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-545Q48Q6');</script>
+  <!-- End Google Tag Manager -->
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-1EFKN3B7MF"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-1EFKN3B7MF');
+  </script>
   <script type="application/ld+json">
   {{ seo.json_ld | tojson }}
   </script>
@@ -59,6 +74,10 @@
   </script>
 </head>
 <body data-champions-mode="{{ 'true' if home.champions_mode else 'false' }}">
+  <!-- Google Tag Manager (noscript) -->
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-545Q48Q6"
+  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+  <!-- End Google Tag Manager (noscript) -->
   <main class="page">
     <header class="top">
       <h1><img class="brandMark" src="/static/favicon-64.png?v=20260411b" alt=""/><span id="site_heading">{{ 'Pokémon Champions Meta' if home.champions_mode else 'Pkmeta' }}</span></h1>
@@ -103,7 +122,7 @@
       </label>
 
       <label><span id="lbl_limit">Max results</span>
-        <input id="limit" type="number" value="{{ home.limit }}" min="10" step="10"/>
+        <input id="limit" type="number" value="{{ home.limit }}" min="{{ 1 if home.champions_mode else 10 }}" max="{{ home.limit_max }}" step="{{ 1 if home.champions_mode else 10 }}"/>
       </label>
 
       <div id="elo_block" class="rangeBlock"{% if home.champions_mode %} hidden{% endif %}>
@@ -237,7 +256,7 @@
               <td>
                 <div class="itemCell" data-item-wrap>
                   <img class="itemCellIcon" data-item-name="{{ a.item }}" alt="{{ a.localized_item or a.item }}" loading="lazy" decoding="async" />
-                  <span class="itemCellLabel" data-item-label>{{ a.localized_item or a.item }}</span>
+                  <span class="itemCellLabel" data-item-label hidden>{{ a.localized_item or a.item }}</span>
                 </div>
               </td>
               <td>{{ fmt_int_lang(a.uses, server_lang) }}</td>
@@ -321,7 +340,7 @@
                 <div class="teamComp teamCompSheet">
                   <div class="teamSprites">
                     {% for member in item.members %}
-                    <span class="teamSpriteWrap">
+                    <span class="teamSpriteWrap" title="{{ member.localized_name or member.name }}">
                       <span class="teamSpriteFrame">
                         <img class="teamSprite" data-srcs='{{ member.sprite_urls | tojson }}' src="{{ member.sprite_urls[0] if member.sprite_urls else '' }}" alt="" loading="lazy" decoding="async" />
                       </span>
@@ -344,7 +363,7 @@
               <td><span class="mono">{{ item.replica_code or '-' }}</span></td>
               <td>
                 <div class="linkList">
-                    {% if item.source_link and item.source_link != '-' %}
+                  {% if item.source_link and item.source_link != '-' %}
                     {% if item.source_link|lower != 'discord submission' and item.source_link.startswith('http') %}
                     <a class="sheetLink" href="{{ item.source_link }}" target="_blank" rel="noopener noreferrer">Source</a>
                     {% elif item.source_link|lower != 'discord submission' %}
@@ -356,13 +375,6 @@
                     <a class="sheetLink" href="{{ item.report_video }}" target="_blank" rel="noopener noreferrer">Video</a>
                     {% else %}
                     <span class="sheetChip">{{ item.report_video }}</span>
-                    {% endif %}
-                  {% endif %}
-                  {% if item.other_links and item.other_links != '-' %}
-                    {% if item.other_links.startswith('http') %}
-                    <a class="sheetLink" href="{{ item.other_links }}" target="_blank" rel="noopener noreferrer">Other</a>
-                    {% else %}
-                    <span class="sheetChip">{{ item.other_links }}</span>
                     {% endif %}
                   {% endif %}
                 </div>
@@ -734,6 +746,7 @@ async function setItemIcon(img, itemName) {
   const rawName = String(itemName || "").trim();
   if (!rawName || rawName === "-") {
     img.style.display = "none";
+    img.style.visibility = "hidden";
     img.removeAttribute("src");
     setLabelVisible(false);
     return;
@@ -742,25 +755,36 @@ async function setItemIcon(img, itemName) {
   const requestId = String(++nextItemIconRequestId);
   img.dataset.itemIconRequestId = requestId;
   img.style.display = "";
-  setLabelVisible(true);
+  img.style.visibility = "hidden";
+  setLabelVisible(false);
 
   const resolvedUrl = await resolveItemIconUrl(rawName);
   if (img.dataset.itemIconRequestId !== requestId) return;
 
   if (!resolvedUrl) {
     img.style.display = "none";
+    img.style.visibility = "hidden";
     img.removeAttribute("src");
     setLabelVisible(false);
     return;
   }
 
+  img.onload = () => {
+    if (img.dataset.itemIconRequestId !== requestId) return;
+    img.style.visibility = "";
+    setLabelVisible(true);
+  };
   img.onerror = () => {
     if (img.dataset.itemIconRequestId !== requestId) return;
     img.style.display = "none";
+    img.style.visibility = "hidden";
     setLabelVisible(false);
   };
   img.src = resolvedUrl;
-  setLabelVisible(true);
+  if (img.complete && img.naturalWidth > 0) {
+    img.style.visibility = "";
+    setLabelVisible(true);
+  }
 }
 
 function hydrateItemIcons(scope = document) {
@@ -783,9 +807,9 @@ function preferAniFirst(spriteUrls) {
 }
 
 const viewSearchState = {
-  pokemon: { q: "", min_games: String((INITIAL_STATE.pokemon || {}).min_games || 0), min_games_auto: Boolean((INITIAL_STATE.pokemon || {}).min_games_auto ?? true), recommended_min_games: Number((INITIAL_STATE.pokemon || {}).min_games || 0), limit: String(INITIAL_STATE.limit || 50) },
-  attacks: { q: "", min_games: String((INITIAL_STATE.attacks || {}).min_games || 0), min_games_auto: Boolean((INITIAL_STATE.attacks || {}).min_games_auto ?? true), recommended_min_games: Number((INITIAL_STATE.attacks || {}).min_games || 0), limit: String(INITIAL_STATE.limit || 50) },
-  teams: { q: "", min_games: String((INITIAL_STATE.teams || {}).min_games || 0), min_games_auto: Boolean((INITIAL_STATE.teams || {}).min_games_auto ?? true), recommended_min_games: Number((INITIAL_STATE.teams || {}).min_games || 0), limit: String(INITIAL_STATE.limit || 50), combo_size: String((INITIAL_STATE.teams || {}).combo_size || 6), members: ["", "", "", "", ""] },
+  pokemon: { q: "", min_games: String((INITIAL_STATE.pokemon || {}).min_games || 0), min_games_auto: Boolean((INITIAL_STATE.pokemon || {}).min_games_auto ?? true), recommended_min_games: Number((INITIAL_STATE.pokemon || {}).min_games || 0), limit: String((INITIAL_STATE.pokemon || {}).limit || INITIAL_STATE.limit || 50) },
+  attacks: { q: "", min_games: String((INITIAL_STATE.attacks || {}).min_games || 0), min_games_auto: Boolean((INITIAL_STATE.attacks || {}).min_games_auto ?? true), recommended_min_games: Number((INITIAL_STATE.attacks || {}).min_games || 0), limit: String((INITIAL_STATE.attacks || {}).limit || INITIAL_STATE.limit || 50) },
+  teams: { q: "", min_games: String((INITIAL_STATE.teams || {}).min_games || 0), min_games_auto: Boolean((INITIAL_STATE.teams || {}).min_games_auto ?? true), recommended_min_games: Number((INITIAL_STATE.teams || {}).min_games || 0), limit: String((INITIAL_STATE.teams || {}).limit || INITIAL_STATE.limit || 50), combo_size: String((INITIAL_STATE.teams || {}).combo_size || 6), members: ["", "", "", "", ""] },
 };
 
 const windowMinGamesCache = {};
@@ -1034,11 +1058,17 @@ function renderTableHeads() {
 
 function updateFormatModeUI() {
   const champions = isChampionsSheetMode();
+  const limitMax = champions ? Number(INITIAL_STATE.limit_max || INITIAL_STATE.matches || INITIAL_STATE.limit || 50) : Number(INITIAL_STATE.limit_max || 2000 || 2000);
   document.body.dataset.championsMode = champions ? "true" : "false";
   if (el("site_heading")) el("site_heading").textContent = champions ? "Pokémon Champions Meta" : "Pkmeta";
   if (el("min_games_wrap")) el("min_games_wrap").hidden = champions;
   if (el("elo_block")) el("elo_block").hidden = champions;
   if (el("team_size_wrap")) el("team_size_wrap").hidden = champions;
+  if (el("limit")) {
+    el("limit").min = champions ? "1" : "10";
+    el("limit").step = champions ? "1" : "10";
+    el("limit").max = String(Math.max(champions ? 1 : 10, limitMax || 2000));
+  }
   if (el("tab_attacks")) el("tab_attacks").textContent = champions ? t("items") : t("tabAttacks");
   const rulesCard = el("rules_notice") ? el("rules_notice").closest(".rulesNotice") : null;
   if (rulesCard) rulesCard.hidden = champions;
@@ -1494,6 +1524,15 @@ function isHttpUrl(value) {
   return /^https?:\/\//i.test(String(value || "").trim());
 }
 
+function normalizeExternalUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("//")) return `https:${raw}`;
+  if (/^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:[/?#].*)?$/i.test(raw)) return `https://${raw}`;
+  return raw;
+}
+
 function megaBadgeHtml(label) {
   return label ? `<span class="megaBadge">${escapeHtml(label)}</span>` : "";
 }
@@ -1502,15 +1541,16 @@ function teamSpriteGridHtml(members) {
   return (Array.isArray(members) ? members : []).map((member) => {
     const srcs = Array.isArray(member.sprite_urls) ? member.sprite_urls : [];
     const firstSrc = srcs[0] || "";
+    const memberName = escapeHtml(member.localized_name || member.name || member.key || "-");
     const itemIcon = member.item
       ? `<img class="teamItemIcon" data-item-name="${escapeHtml(member.item)}" alt="${escapeHtml(member.localized_item || member.item)}" loading="lazy" decoding="async" />`
       : "";
-    return `<span class="teamSpriteWrap"><span class="teamSpriteFrame"><img class="teamSprite" data-srcs='${JSON.stringify(srcs)}' src="${firstSrc}" alt="" loading="lazy" decoding="async" /></span>${itemIcon}</span>`;
+    return `<span class="teamSpriteWrap" title="${memberName}"><span class="teamSpriteFrame"><img class="teamSprite" data-srcs='${JSON.stringify(srcs)}' src="${firstSrc}" alt="" loading="lazy" decoding="async" /></span>${itemIcon}</span>`;
   }).join("");
 }
 
 function renderSheetLink(value, label) {
-  const raw = String(value || "").trim();
+  const raw = normalizeExternalUrl(value);
   if (!raw || raw === "-" || raw.toLowerCase() === "discord submission") return "";
   if (isHttpUrl(raw)) {
     return `<a class="sheetLink" href="${escapeHtml(raw)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
@@ -1550,7 +1590,7 @@ function renderAttackRows(items) {
     for (const item of items) {
       const tr = document.createElement("tr");
       const td0 = document.createElement("td");
-      td0.innerHTML = `<div class="itemCell" data-item-wrap><img class="itemCellIcon" data-item-name="${escapeHtml(item.item || "")}" alt="${escapeHtml(item.localized_item || item.item || "")}" loading="lazy" decoding="async" /><span class="itemCellLabel" data-item-label>${escapeHtml(item.localized_item || item.item || "-")}</span></div>`;
+      td0.innerHTML = `<div class="itemCell" data-item-wrap><img class="itemCellIcon" data-item-name="${escapeHtml(item.item || "")}" alt="${escapeHtml(item.localized_item || item.item || "")}" loading="lazy" decoding="async" /><span class="itemCellLabel" data-item-label hidden>${escapeHtml(item.localized_item || item.item || "-")}</span></div>`;
       tr.appendChild(td0);
       const td1 = document.createElement("td"); td1.textContent = fmtInt(item.uses || 0); tr.appendChild(td1);
       const td2 = document.createElement("td"); td2.textContent = fmtInt(item.games || 0); tr.appendChild(td2);
@@ -1609,7 +1649,6 @@ function renderTeamRows(items, comboSizeFallback) {
       td4.innerHTML = `<div class="linkList">${[
         renderSheetLink(item.source_link, t("source")),
         renderSheetLink(item.report_video, "Video"),
-        renderSheetLink(item.other_links, "Other"),
       ].filter(Boolean).join("")}</div>`;
       tr.appendChild(td4);
       tbody.appendChild(tr);
@@ -1709,8 +1748,9 @@ function hydrateInitialState() {
   renderTypeButtons(cachedTypes);
 
   setDefaultMeta();
-  el("min_games").value = String((INITIAL_STATE.pokemon || {}).min_games || 0);
-  el("limit").value = String(INITIAL_STATE.limit || 50);
+  const initialViewState = activeViewState();
+  el("min_games").value = String(initialViewState.min_games || 0);
+  el("limit").value = String(initialViewState.limit || INITIAL_STATE.limit || 50);
   hydratePokemonPreloadedRows();
   hydrateItemIcons(el("attack_rows"));
   hydrateTeamPreloadedRows();
@@ -1729,6 +1769,7 @@ function openModal(title, bodyHtml) {
   el("modalBody").innerHTML = bodyHtml || "";
   el("modalBack").style.display = "flex";
 }
+
 function closeModal() {
   el("modalBack").style.display = "none";
   el("modalBack").classList.remove("isTimelineMode");
@@ -3029,7 +3070,7 @@ async function loadDetail(key, nameHint, detailFilters = null) {
       return `<div class="listLine">
         <div style="display:flex; align-items:center; gap:10px;" data-item-wrap>
           <img class="itemico" id="itimg_${idx}" alt="" loading="lazy" decoding="async"/>
-          <div data-item-label>${escapeHtml(x.localized_item || x.item)}</div>
+          <div data-item-label hidden>${escapeHtml(x.localized_item || x.item)}</div>
         </div>
         <div class="mono">${fmtPct1(p)}</div>
       </div>`;
