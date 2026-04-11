@@ -10,9 +10,11 @@ import math
 import os
 import re
 import sqlite3
+import time
 import unicodedata
+from collections import Counter
 from io import StringIO
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.request import Request, urlopen
 
 from flask import Flask, Response, jsonify, redirect, render_template, request
@@ -136,6 +138,20 @@ CHAMPIONS_ALLOWED_POKEMON_KEY_LIST = tuple(sorted(CHAMPIONS_ALLOWED_POKEMON_KEYS
 _PICKER_MERGE_TO_BASE = {"minior", "florges", "squawkabilly", "pikachu"}
 DATASET_SOURCE_NAME = "pokemon-showdown-replays"
 DATASET_SOURCE_URL = "https://huggingface.co/datasets/HolidayOugi/pokemon-showdown-replays"
+CHAMPIONS_SHEET_SOURCE_NAME = "VGCPastes Repository (Champions)"
+CHAMPIONS_SHEET_VIEW_URL = "https://docs.google.com/spreadsheets/d/1axlwmzPA49rYkqXh7zHvAtSP-TKbM0ijGYBPRflLSWw/htmlview?usp=sharing&pru=AAABnZwziio*y1cRxcp4gB4n0X9zMwN2RA#gid=791705272"
+CHAMPIONS_SHEET_GVIZ_URL = "https://docs.google.com/spreadsheets/d/1axlwmzPA49rYkqXh7zHvAtSP-TKbM0ijGYBPRflLSWw/gviz/tq?tqx=out:json&gid=791705272"
+CHAMPIONS_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1axlwmzPA49rYkqXh7zHvAtSP-TKbM0ijGYBPRflLSWw/export?format=csv&gid=791705272"
+CHAMPIONS_SHEET_CACHE_TTL_SECONDS = 3600
+CHAMPIONS_SHEET_REQUEST_TIMEOUT_SECONDS = 2
+CHAMPIONS_SHEET_DISK_CACHE_PATH = os.environ.get("PKMETA_CHAMPIONS_SHEET_CACHE", "/tmp/pkmeta_champions_sheet_rows.json")
+CHAMPIONS_SHEET_ITEM_COLUMNS = (7, 10, 13, 16, 19, 22)
+CHAMPIONS_SHEET_MEMBER_COLUMNS = (37, 38, 39, 40, 41, 42)
+CUSTOM_SPRITE_FALLBACKS: Dict[str, tuple[str, ...]] = {
+    "floettemega": (
+        "https://www.pokepedia.fr/images/5/50/M%C3%A9ga-Floette-LPZA.png",
+    ),
+}
 SITE_BRAND = (os.environ.get("PKMETA_SITE_BRAND", "Pkmeta") or "Pkmeta").strip()
 CANONICAL_HOST = (os.environ.get("PKMETA_CANONICAL_HOST", "pokemonchampionsmeta.net") or "pokemonchampionsmeta.net").strip().lower()
 if CANONICAL_HOST.startswith("www."):
@@ -150,6 +166,8 @@ SECONDARY_HOSTS.discard(CANONICAL_HOST)
 PUBLIC_HOSTS: Set[str] = set(SECONDARY_HOSTS)
 PUBLIC_HOSTS.add(CANONICAL_HOST)
 PUBLIC_BASE_URL = f"https://{CANONICAL_HOST}"
+_CHAMPIONS_SHEET_CACHE: Dict[str, Any] | None = None
+_CHAMPIONS_SHEET_CACHE_AT = 0.0
 
 
 # Sprite URL helpers
@@ -176,25 +194,86 @@ def _keep_only_first_dash(slug: str) -> str:
     head, rest = slug.split("-", 1)
     return head + "-" + rest.replace("-", "")
 
-def sprite_urls(key: str, name: str) -> List[str]:
-    slug = _dashify(name)
-    slug2 = _keep_only_first_dash(slug)
+
+def _mega_form_parts(key: str) -> Optional[Tuple[str, str]]:
+    kid = _to_id(key)
+    m = re.fullmatch(r"([a-z0-9]+?)mega([a-z0-9]*)", kid)
+    if not m:
+        return None
+    return (m.group(1), m.group(2))
+
+
+def _champions_pokemon_key_candidates(name: str, key: str = "") -> List[str]:
     out: List[str] = []
 
-    def add(u: str) -> None:
+    def add(candidate: str) -> None:
+        cid = _to_id(candidate)
+        if cid and cid not in out:
+            out.append(cid)
+
+    raw_name = str(name or "").strip()
+
+    tokens = [tok for tok in re.split(r"[\s\-]+", raw_name) if tok]
+    if len(tokens) >= 2 and tokens[0].lower() == "mega":
+        body = tokens[1:]
+        if len(body) >= 2 and len(body[-1]) <= 2 and body[-1].isalnum():
+            base = " ".join(body[:-1]).strip()
+            suffix = body[-1].strip()
+            if base:
+                add(f"{base} mega {suffix}")
+                add(base)
+        else:
+            full_base = " ".join(body).strip()
+            if full_base:
+                add(f"{full_base} mega")
+                add(full_base)
+
+    add(key)
+    add(raw_name)
+
+    return out
+
+
+def sprite_urls(key: str, name: str) -> List[str]:
+    out: List[str] = []
+    seen_variants: Set[str] = set()
+
+    def add_url(u: str) -> None:
         if u not in out:
             out.append(u)
 
-    # Animated sprites may use dashed or compact forms.
-    add(f"{SPRITE_ANI}{slug}.gif")
-    add(f"{SPRITE_ANI}{slug2}.gif")
-    add(f"{SPRITE_ANI}{key}.gif")
+    def add_variant(variant: str) -> None:
+        slug = _dashify(variant)
+        if not slug or slug in seen_variants:
+            return
+        seen_variants.add(slug)
+        slug2 = _keep_only_first_dash(slug)
+        add_url(f"{SPRITE_ANI}{slug}.gif")
+        if slug2 != slug:
+            add_url(f"{SPRITE_ANI}{slug2}.gif")
+        for base in (SPRITE_HOME, SPRITE_GEN5):
+            add_url(f"{base}{slug}.png")
+            if slug2 != slug:
+                add_url(f"{base}{slug2}.png")
 
-    # Static sprite fallbacks.
-    for base in (SPRITE_HOME, SPRITE_GEN5):
-        add(f"{base}{slug}.png")
-        add(f"{base}{slug2}.png")
-        add(f"{base}{key}.png")
+    base_fallback_key = ""
+    for candidate_key in _champions_pokemon_key_candidates(name, key):
+        mega_parts = _mega_form_parts(candidate_key)
+        if mega_parts:
+            base_key, mega_suffix = mega_parts
+            mega_slug = f"{base_key}-mega{mega_suffix}" if mega_suffix else f"{base_key}-mega"
+            add_variant(mega_slug)
+            if base_key:
+                base_fallback_key = base_key
+        for custom_url in CUSTOM_SPRITE_FALLBACKS.get(candidate_key, ()):
+            add_url(custom_url)
+        add_variant(candidate_key)
+
+    add_variant(name)
+    add_variant(key)
+
+    if base_fallback_key:
+        add_variant(base_fallback_key)
 
     return out
 
@@ -272,9 +351,9 @@ def _is_pokemon_allowed_for_format(formatid: str, key: str) -> bool:
     return allowed_keys is None or _to_id(key) in allowed_keys
 
 
-def _read_text_url(url: str) -> str:
+def _read_text_url(url: str, timeout: int = 20) -> str:
     req = Request(url, headers={"User-Agent": "pkmeta/1.0"})
-    with urlopen(req, timeout=20) as resp:
+    with urlopen(req, timeout=timeout) as resp:
         return resp.read().decode("utf-8")
 
 
@@ -298,6 +377,567 @@ def _read_json_url(url: str) -> Any:
     req = Request(url, headers={"User-Agent": "pkmeta/1.0"})
     with urlopen(req, timeout=20) as resp:
         return json.loads(resp.read().decode("utf-8"))
+
+
+def _format_uses_champions_sheet(formatid: str) -> bool:
+    return (formatid or "").strip().lower() == SPECIAL_FORMAT_CHAMPIONS
+
+
+def _matches_search(qraw: str, qid: str, *values: str) -> bool:
+    if not qraw:
+        return True
+    lowered = [str(v or "").lower() for v in values]
+    if qid and any(qid in _to_id(v) for v in values if v):
+        return True
+    return any(qraw in v for v in lowered)
+
+
+def _sheet_cell_text(cells: List[Any], index: int) -> str:
+    if index < 0 or index >= len(cells):
+        return ""
+    cell = cells[index]
+    if not isinstance(cell, dict):
+        return ""
+    if cell.get("f") is not None:
+        return str(cell.get("f") or "").strip()
+    if cell.get("v") is not None:
+        return str(cell.get("v") or "").strip()
+    return ""
+
+
+def _champions_sheet_date(cells: List[Any], index: int) -> tuple[int, str]:
+    display = _sheet_cell_text(cells, index)
+    if index < 0 or index >= len(cells):
+        return (0, display)
+    cell = cells[index]
+    if not isinstance(cell, dict):
+        return (0, display)
+    raw = str(cell.get("v") or "")
+    m = re.fullmatch(r"Date\((\d+),(\d+),(\d+)\)", raw)
+    if not m:
+        for fmt in ("%d %b %Y", "%d %B %Y", "%Y-%m-%d"):
+            try:
+                parsed = time.strptime(display, fmt)
+                return (parsed.tm_year * 10000 + parsed.tm_mon * 100 + parsed.tm_mday, display)
+            except Exception:
+                continue
+        return (0, display)
+    year = int(m.group(1))
+    month = int(m.group(2)) + 1
+    day = int(m.group(3))
+    return (year * 10000 + month * 100 + day, display)
+
+
+def _champions_sheet_csv_rows() -> List[Dict[str, Any]]:
+    text = _read_text_url(CHAMPIONS_SHEET_CSV_URL, timeout=CHAMPIONS_SHEET_REQUEST_TIMEOUT_SECONDS)
+    rows: List[Dict[str, Any]] = []
+    for row in csv.reader(StringIO(text)):
+        cells = []
+        for value in row:
+            value_str = str(value or "")
+            cells.append({"v": value_str, "f": value_str} if value_str else None)
+        rows.append({"c": cells})
+    return rows
+
+
+def _champions_sheet_table_rows() -> List[Dict[str, Any]]:
+    text = _read_text_url(CHAMPIONS_SHEET_GVIZ_URL, timeout=CHAMPIONS_SHEET_REQUEST_TIMEOUT_SECONDS)
+    m = re.search(r"setResponse\((.*)\);\s*$", text, re.S)
+    if not m:
+        raise ValueError("Could not parse Champions sheet response")
+    payload = json.loads(m.group(1))
+    return payload.get("table", {}).get("rows") or []
+
+
+def _load_champions_sheet_rows_from_disk() -> List[Dict[str, Any]]:
+    try:
+        with open(CHAMPIONS_SHEET_DISK_CACHE_PATH, "r", encoding="utf-8") as fh:
+            rows = json.load(fh)
+        return rows if isinstance(rows, list) else []
+    except Exception:
+        return []
+
+
+def _store_champions_sheet_rows_to_disk(rows: List[Dict[str, Any]]) -> None:
+    try:
+        with open(CHAMPIONS_SHEET_DISK_CACHE_PATH, "w", encoding="utf-8") as fh:
+            json.dump(rows, fh, ensure_ascii=True)
+    except Exception:
+        return None
+
+
+def _empty_champions_sheet_data() -> Dict[str, Any]:
+    return {
+        "team_count": 0,
+        "slot_count": 0,
+        "teams": [],
+        "pokemon_counts": {},
+        "pokemon_names": {},
+        "item_uses": {},
+        "item_team_counts": {},
+        "type_counts": {},
+        "types": [],
+        "used_keys": tuple(),
+    }
+
+
+def _mega_badge_for_name(name: str) -> str:
+    nm = str(name or "")
+    parts = [part for part in re.split(r"[\s\-]+", nm) if part]
+    if len(parts) >= 2 and parts[0].lower() == "mega":
+        if len(parts) >= 3 and len(parts[-1]) <= 2 and parts[-1].isalnum():
+            return f"Mega {parts[-1].upper()}"
+        return "Mega"
+    if "-Mega-X" in nm:
+        return "Mega X"
+    if "-Mega-Y" in nm:
+        return "Mega Y"
+    if "-Mega" in nm:
+        return "Mega"
+    return ""
+
+
+def _resolve_champions_member_identity(name: str, identity_map: Dict[str, Dict[str, Any]]) -> Tuple[str, str]:
+    raw_name = str(name or "").strip()
+    for candidate_key in _champions_pokemon_key_candidates(raw_name):
+        info = identity_map.get(candidate_key)
+        if info:
+            return (candidate_key, str(info.get("name") or raw_name))
+        if candidate_key in CHAMPIONS_ALLOWED_POKEMON_KEYS:
+            return (candidate_key, raw_name)
+    return (_to_id(raw_name), raw_name)
+
+
+def _clean_champions_link_value(value: str) -> str:
+    raw = str(value or "").strip()
+    if not raw or raw == "-":
+        return ""
+    if raw.lower() == "discord submission":
+        return ""
+    return raw
+
+
+def _champions_sheet_raw_data() -> Dict[str, Any]:
+    global _CHAMPIONS_SHEET_CACHE, _CHAMPIONS_SHEET_CACHE_AT
+    now = time.time()
+    if _CHAMPIONS_SHEET_CACHE is not None and (now - _CHAMPIONS_SHEET_CACHE_AT) < CHAMPIONS_SHEET_CACHE_TTL_SECONDS:
+        return _CHAMPIONS_SHEET_CACHE
+
+    try:
+        rows = _champions_sheet_table_rows()
+        _store_champions_sheet_rows_to_disk(rows)
+    except Exception:
+        try:
+            rows = _champions_sheet_csv_rows()
+            _store_champions_sheet_rows_to_disk(rows)
+        except Exception:
+            rows = _load_champions_sheet_rows_from_disk()
+            if rows:
+                pass
+            elif _CHAMPIONS_SHEET_CACHE is not None:
+                return _CHAMPIONS_SHEET_CACHE
+            else:
+                _CHAMPIONS_SHEET_CACHE = _empty_champions_sheet_data()
+                _CHAMPIONS_SHEET_CACHE_AT = now
+                return _CHAMPIONS_SHEET_CACHE
+
+    pokedex_json_path = os.environ.get("PKMETA_POKEDEX_JSON", "")
+    poke_type_map = load_pokedex_type_map(pokedex_json_path)
+    identity_map = load_pokedex_identity_map(pokedex_json_path)
+    teams: List[Dict[str, Any]] = []
+    pokemon_counts: Counter[str] = Counter()
+    item_uses: Counter[str] = Counter()
+    item_team_counts: Counter[str] = Counter()
+    type_counts: Counter[str] = Counter()
+    pokemon_names: Dict[str, str] = {}
+    used_keys: Set[str] = set()
+
+    for row in rows:
+        cells = row.get("c") or []
+        team_id = _sheet_cell_text(cells, 0)
+        if not team_id.startswith("PC"):
+            continue
+
+        slots: List[Dict[str, Any]] = []
+        team_item_names: List[str] = []
+        team_member_names: List[str] = []
+        team_type_set: Set[str] = set()
+        seen_items_this_team: Set[str] = set()
+
+        for item_col, member_col in zip(CHAMPIONS_SHEET_ITEM_COLUMNS, CHAMPIONS_SHEET_MEMBER_COLUMNS):
+            member_name = _sheet_cell_text(cells, member_col)
+            item_name = _sheet_cell_text(cells, item_col)
+            if not member_name:
+                continue
+            key, canonical_name = _resolve_champions_member_identity(member_name, identity_map)
+            types = poke_type_map.get(key, poke_type_map.get(_to_id(member_name), []))
+            mega_label = _mega_badge_for_name(canonical_name or member_name)
+            slots.append(
+                {
+                    "key": key,
+                    "name": canonical_name or member_name,
+                    "sheet_name": member_name,
+                    "item": item_name,
+                    "types": types,
+                    "mega_label": mega_label,
+                }
+            )
+            team_member_names.append(member_name)
+            if canonical_name and canonical_name != member_name:
+                team_member_names.append(canonical_name)
+            if item_name and item_name != "-":
+                team_item_names.append(item_name)
+                item_uses[item_name] += 1
+                if item_name not in seen_items_this_team:
+                    item_team_counts[item_name] += 1
+                    seen_items_this_team.add(item_name)
+            if key:
+                pokemon_counts[key] += 1
+                used_keys.add(key)
+                pokemon_names.setdefault(key, canonical_name or member_name)
+            for type_name in types:
+                type_counts[type_name] += 1
+                team_type_set.add(type_name)
+
+        if not slots:
+            continue
+
+        date_sort, date_display = _champions_sheet_date(cells, 29)
+        team_id_num_match = re.search(r"(\d+)$", team_id)
+        team_id_num = int(team_id_num_match.group(1)) if team_id_num_match else 0
+        search_values = [
+            team_id,
+            _sheet_cell_text(cells, 1),
+            _sheet_cell_text(cells, 3),
+            _sheet_cell_text(cells, 24),
+            _sheet_cell_text(cells, 25),
+            _sheet_cell_text(cells, 26),
+            _sheet_cell_text(cells, 27),
+            _sheet_cell_text(cells, 28),
+            date_display,
+            _sheet_cell_text(cells, 30),
+            _sheet_cell_text(cells, 31),
+            _sheet_cell_text(cells, 32),
+            _sheet_cell_text(cells, 33),
+            _sheet_cell_text(cells, 34),
+            _sheet_cell_text(cells, 35),
+            *team_item_names,
+            *team_member_names,
+        ]
+        teams.append(
+            {
+                "team_id": team_id,
+                "team_id_num": team_id_num,
+                "description": _sheet_cell_text(cells, 1),
+                "full_name": _sheet_cell_text(cells, 3),
+                "pokepaste": _sheet_cell_text(cells, 24),
+                "evs": _sheet_cell_text(cells, 25),
+                "extracted_paste": _sheet_cell_text(cells, 26),
+                "replica_status": _sheet_cell_text(cells, 27),
+                "replica_code": _sheet_cell_text(cells, 28),
+                "date": date_display,
+                "date_sort": date_sort,
+                "event": _sheet_cell_text(cells, 30),
+                "rank": _sheet_cell_text(cells, 31),
+                "source_link": _sheet_cell_text(cells, 32),
+                "report_video": _sheet_cell_text(cells, 33),
+                "other_links": _sheet_cell_text(cells, 34),
+                "owner": _sheet_cell_text(cells, 35),
+                "slots": slots,
+                "member_keys": [slot["key"] for slot in slots if slot.get("key")],
+                "member_key_set": {slot["key"] for slot in slots if slot.get("key")},
+                "member_names": team_member_names,
+                "item_names": team_item_names,
+                "type_set": team_type_set,
+                "search_blob": " ".join(v for v in search_values if v).lower(),
+                "search_id": _to_id(" ".join(v for v in search_values if v)),
+            }
+        )
+
+    teams.sort(key=lambda team: (team.get("date_sort", 0), team.get("team_id_num", 0)), reverse=True)
+    types_sorted = [
+        type_name
+        for type_name, _ in sorted(
+            type_counts.items(),
+            key=lambda kv: (-kv[1], _TYPE_ORDER_INDEX.get(kv[0], 999), kv[0]),
+        )
+    ]
+
+    _CHAMPIONS_SHEET_CACHE = {
+        "team_count": len(teams),
+        "slot_count": sum(len(team["slots"]) for team in teams),
+        "teams": teams,
+        "pokemon_counts": dict(pokemon_counts),
+        "pokemon_names": pokemon_names,
+        "item_uses": dict(item_uses),
+        "item_team_counts": dict(item_team_counts),
+        "type_counts": dict(type_counts),
+        "types": types_sorted,
+        "used_keys": tuple(sorted(used_keys)),
+    }
+    _CHAMPIONS_SHEET_CACHE_AT = now
+    return _CHAMPIONS_SHEET_CACHE
+
+
+def _champions_member_payload(slot: Dict[str, Any], lang: str) -> Dict[str, Any]:
+    name = str(slot.get("name") or slot.get("key") or "")
+    key = str(slot.get("key") or _to_id(name))
+    item_name = str(slot.get("item") or "")
+    localized_name_map = load_pokemon_localized_name_map(lang)
+    item_localized_map = load_item_localized_name_map(lang)
+    localized_name = localized_name_map.get(key, localized_name_map.get(_to_id(name), name))
+    localized_item = item_localized_map.get(_to_id(item_name), item_name) if item_name else ""
+    return {
+        "key": key,
+        "name": name,
+        "localized_name": localized_name,
+        "item": item_name,
+        "localized_item": localized_item,
+        "types": list(slot.get("types") or []),
+        "sprite_urls": sprite_urls(key, name),
+        "is_mega": bool(slot.get("mega_label")),
+        "mega_label": str(slot.get("mega_label") or ""),
+    }
+
+
+def _champions_pokemon_payload(
+    formatid: str,
+    q: str,
+    lang: str,
+    selected_types: Set[str],
+    sort: str,
+    order: str,
+    min_games: int,
+    limit: int,
+) -> Dict[str, Any]:
+    raw = _champions_sheet_raw_data()
+    total_teams = int(raw.get("team_count") or 0)
+    localized_name_map = load_pokemon_localized_name_map(lang)
+    poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+    qraw = (q or "").strip().lower()
+    qid = _to_id(qraw)
+    items: List[Dict[str, Any]] = []
+
+    for key, games in raw.get("pokemon_counts", {}).items():
+        count = int(games or 0)
+        if count < min_games:
+            continue
+        name = str(raw.get("pokemon_names", {}).get(key) or key)
+        localized_name = localized_name_map.get(key, localized_name_map.get(_to_id(name), name))
+        types = poke_type_map.get(key, [])
+        if selected_types and not selected_types.intersection(types):
+            continue
+        if not _matches_search(qraw, qid, name, localized_name, key):
+            continue
+        mega_label = _mega_badge_for_name(name)
+        items.append(
+            {
+                "key": key,
+                "name": name,
+                "localized_name": localized_name,
+                "games": count,
+                "popularity": (count / total_teams) if total_teams else 0.0,
+                "types": types,
+                "sprite_urls": sprite_urls(key, name),
+                "is_mega": bool(mega_label),
+                "mega_label": mega_label,
+            }
+        )
+
+    reverse = (order != "asc")
+    if sort == "name":
+        items.sort(key=lambda x: (x["localized_name"] or x["name"]).lower(), reverse=reverse)
+    elif sort == "types":
+        items.sort(key=lambda x: "/".join(x.get("types", [])).lower(), reverse=reverse)
+    elif sort == "games":
+        items.sort(key=lambda x: x["games"], reverse=reverse)
+    else:
+        items.sort(key=lambda x: x["popularity"], reverse=reverse)
+
+    return {
+        "formatid": formatid,
+        "elo_min": 0,
+        "elo_max": 0,
+        "items": items[:limit],
+        "meta": {
+            "matches": total_teams,
+            "min_games_default": 0,
+            "winrate_warning": {"show": False, "message": ""},
+        },
+    }
+
+
+def _champions_items_payload(
+    formatid: str,
+    q: str,
+    lang: str,
+    selected_types: Set[str],
+    sort: str,
+    order: str,
+    min_games: int,
+    limit: int,
+) -> Dict[str, Any]:
+    raw = _champions_sheet_raw_data()
+    total_teams = int(raw.get("team_count") or 0)
+    qraw = (q or "").strip().lower()
+    qid = _to_id(qraw)
+    item_localized_map = load_item_localized_name_map(lang)
+    item_uses: Counter[str] = Counter()
+    item_team_counts: Counter[str] = Counter()
+    total_slots = 0
+
+    for team in raw.get("teams", []):
+        seen_items_this_team: Set[str] = set()
+        for slot in team.get("slots", []):
+            types = set(slot.get("types") or [])
+            if selected_types and not selected_types.intersection(types):
+                continue
+            item_name = str(slot.get("item") or "")
+            if not item_name or item_name == "-":
+                continue
+            total_slots += 1
+            item_uses[item_name] += 1
+            seen_items_this_team.add(item_name)
+        for item_name in seen_items_this_team:
+            item_team_counts[item_name] += 1
+
+    items: List[Dict[str, Any]] = []
+    for item_name, uses in item_uses.items():
+        uses_int = int(uses or 0)
+        if uses_int < min_games:
+            continue
+        localized_item = item_localized_map.get(_to_id(item_name), item_name)
+        if not _matches_search(qraw, qid, item_name, localized_item):
+            continue
+        teams_with_item = int(item_team_counts.get(item_name, 0))
+        items.append(
+            {
+                "item": item_name,
+                "localized_item": localized_item,
+                "uses": uses_int,
+                "games": teams_with_item,
+                "use_rate": (uses_int / total_slots) if total_slots else 0.0,
+                "team_rate": (teams_with_item / total_teams) if total_teams else 0.0,
+            }
+        )
+
+    reverse = (order != "asc")
+    if sort == "item":
+        items.sort(key=lambda x: (x["localized_item"] or x["item"]).lower(), reverse=reverse)
+    elif sort == "games":
+        items.sort(key=lambda x: x["games"], reverse=reverse)
+    elif sort == "popularity":
+        items.sort(key=lambda x: x["use_rate"], reverse=reverse)
+    else:
+        items.sort(key=lambda x: x["uses"], reverse=reverse)
+
+    return {
+        "formatid": formatid,
+        "elo_min": 0,
+        "elo_max": 0,
+        "items": items[:limit],
+        "meta": {"matches": total_teams, "min_games_default": 0},
+    }
+
+
+def _champions_team_payload(
+    formatid: str,
+    q: str,
+    lang: str,
+    selected_types: Set[str],
+    required_member_keys: List[str],
+    sort: str,
+    order: str,
+    limit: int,
+) -> Dict[str, Any]:
+    raw = _champions_sheet_raw_data()
+    total_teams = int(raw.get("team_count") or 0)
+    qraw = (q or "").strip().lower()
+    qid = _to_id(qraw)
+    required_keys = {str(key or "").strip() for key in required_member_keys if str(key or "").strip()}
+    items: List[Dict[str, Any]] = []
+
+    for team in raw.get("teams", []):
+        if required_keys and not required_keys.issubset(team.get("member_key_set", set())):
+            continue
+        if selected_types and not selected_types.intersection(team.get("type_set", set())):
+            continue
+        if not _matches_search(
+            qraw,
+            qid,
+            team.get("team_id", ""),
+            team.get("description", ""),
+            team.get("full_name", ""),
+            team.get("owner", ""),
+            team.get("replica_code", ""),
+            team.get("source_link", ""),
+            team.get("report_video", ""),
+            team.get("other_links", ""),
+            *team.get("member_names", []),
+            *team.get("item_names", []),
+        ):
+            continue
+
+        members = [_champions_member_payload(slot, lang) for slot in team.get("slots", [])]
+        member_summary = " / ".join(member.get("localized_name") or member.get("name") or "-" for member in members)
+        source_link = _clean_champions_link_value(str(team.get("source_link") or ""))
+        report_video = _clean_champions_link_value(str(team.get("report_video") or ""))
+        other_links = _clean_champions_link_value(str(team.get("other_links") or ""))
+        links = []
+        if source_link:
+            links.append({"label": "Source", "url": source_link})
+        if report_video:
+            links.append({"label": "Video", "url": report_video})
+        if other_links:
+            links.append({"label": "Other", "url": other_links})
+        items.append(
+            {
+                "team_id": team.get("team_id", ""),
+                "label": team.get("description", "") or member_summary,
+                "description": team.get("description", ""),
+                "member_summary": member_summary,
+                "full_name": team.get("full_name", ""),
+                "owner": team.get("owner", ""),
+                "date": team.get("date", ""),
+                "date_sort": int(team.get("date_sort") or 0),
+                "event": team.get("event", ""),
+                "rank": team.get("rank", ""),
+                "replica_code": team.get("replica_code", ""),
+                "replica_status": team.get("replica_status", ""),
+                "pokepaste": team.get("pokepaste", ""),
+                "evs": team.get("evs", ""),
+                "extracted_paste": team.get("extracted_paste", ""),
+                "source_link": source_link,
+                "report_video": report_video,
+                "other_links": other_links,
+                "links": links,
+                "members": members,
+                "combo_size": len(members),
+                "team_id_num": int(team.get("team_id_num") or 0),
+            }
+        )
+
+    reverse = (order != "asc")
+    if sort == "name":
+        items.sort(key=lambda x: (x.get("label") or "").lower(), reverse=reverse)
+    elif sort == "owner":
+        items.sort(key=lambda x: (x.get("owner") or "").lower(), reverse=reverse)
+    elif sort == "code":
+        items.sort(key=lambda x: (x.get("replica_code") or "").lower(), reverse=reverse)
+    elif sort == "source":
+        items.sort(key=lambda x: (x.get("source_link") or "").lower(), reverse=reverse)
+    elif sort == "team_id":
+        items.sort(key=lambda x: int(x.get("team_id_num") or 0), reverse=reverse)
+    else:
+        items.sort(key=lambda x: (int(x.get("date_sort") or 0), int(x.get("team_id_num") or 0)), reverse=reverse)
+
+    return {
+        "formatid": formatid,
+        "elo_min": 0,
+        "elo_max": 0,
+        "items": items[:limit],
+        "meta": {"matches": total_teams, "min_games_default": 0},
+    }
 
 
 def load_pokedex_type_map(local_json_path: str = "") -> Dict[str, List[str]]:
@@ -772,6 +1412,27 @@ def _pokemon_picker_options(lang: str, formatid: str = "") -> List[Dict[str, Any
     if cached is not None:
         return cached
 
+    if _format_uses_champions_sheet(format_norm):
+        raw = _champions_sheet_raw_data()
+        localized_name_map = load_pokemon_localized_name_map(lang_norm)
+        poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+        options: List[Dict[str, Any]] = []
+        for key in raw.get("used_keys", ()): 
+            name = str(raw.get("pokemon_names", {}).get(key) or key)
+            localized_name = localized_name_map.get(key, localized_name_map.get(_to_id(name), name))
+            options.append(
+                {
+                    "key": key,
+                    "name": name,
+                    "localized_name": localized_name,
+                    "types": poke_type_map.get(key, []),
+                    "sprite_urls": sprite_urls(key, name),
+                }
+            )
+        options.sort(key=lambda x: (_to_id(x["localized_name"]), _to_id(x["name"])))
+        _POKEMON_PICKER_OPTION_CACHE[cache_key] = options
+        return options
+
     identity_map = load_pokedex_identity_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
     localized_name_map = load_pokemon_localized_name_map(lang_norm)
     poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
@@ -1124,9 +1785,100 @@ def _attack_items_payload(
     }
 
 
+def _champions_home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
+    formats = _available_formats(db_path)
+    footer_copy = _footer_copy_for_lang(lang)
+    teams = _champions_team_payload(
+        formatid=SPECIAL_FORMAT_CHAMPIONS,
+        q="",
+        lang=lang,
+        selected_types=set(),
+        required_member_keys=[],
+        sort="date",
+        order="desc",
+        limit=DEFAULT_HOME_LIMIT,
+    )
+    pokemon = _champions_pokemon_payload(
+        formatid=SPECIAL_FORMAT_CHAMPIONS,
+        q="",
+        lang=lang,
+        selected_types=set(),
+        sort="games",
+        order="desc",
+        min_games=0,
+        limit=DEFAULT_HOME_LIMIT,
+    )
+    items = _champions_items_payload(
+        formatid=SPECIAL_FORMAT_CHAMPIONS,
+        q="",
+        lang=lang,
+        selected_types=set(),
+        sort="uses",
+        order="desc",
+        min_games=0,
+        limit=DEFAULT_HOME_LIMIT,
+    )
+    raw = _champions_sheet_raw_data()
+    team_rows_by_size = {str(DEFAULT_HOME_TEAM_SIZE): teams["items"]}
+    return {
+        "formats": formats,
+        "formatid": SPECIAL_FORMAT_CHAMPIONS,
+        "elo_min": 0,
+        "elo_max": 0,
+        "elo_step": 1,
+        "matches": int(raw.get("team_count") or 0),
+        "matches_display": _human_int(int(raw.get("team_count") or 0)),
+        "min_games": 0,
+        "min_games_display": "0",
+        "limit": DEFAULT_HOME_LIMIT,
+        "rows": pokemon["items"],
+        "attack_rows": items["items"],
+        "team_rows": teams["items"],
+        "source_name": CHAMPIONS_SHEET_SOURCE_NAME,
+        "source_url": CHAMPIONS_SHEET_VIEW_URL,
+        "footer": footer_copy,
+        "pokemon_winrate_warning": {"show": False, "message": ""},
+        "champions_mode": True,
+        "default_view": "teams",
+        "initial_state": {
+            "formats": formats,
+            "default_format": SPECIAL_FORMAT_CHAMPIONS,
+            "elo_min": 0,
+            "elo_max": 0,
+            "elo_step": 1,
+            "types": list(raw.get("types") or []),
+            "matches": int(raw.get("team_count") or 0),
+            "active_view": "teams",
+            "champions_mode": True,
+            "pokemon": {
+                "min_games": 0,
+                "sort": "games",
+                "order": "desc",
+                "preloaded": True,
+                "min_games_auto": True,
+                "winrate_warning": {"show": False, "message": ""},
+            },
+            "attacks": {"min_games": 0, "sort": "uses", "order": "desc", "preloaded": True, "min_games_auto": True},
+            "teams": {
+                "min_games": 0,
+                "sort": "date",
+                "order": "desc",
+                "combo_size": DEFAULT_HOME_TEAM_SIZE,
+                "preloaded": True,
+                "min_games_auto": True,
+                "by_size": team_rows_by_size,
+            },
+            "pokemon_picker_options": _pokemon_picker_options(lang, SPECIAL_FORMAT_CHAMPIONS),
+            "limit": DEFAULT_HOME_LIMIT,
+        },
+    }
+
+
 def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, lang: str) -> Dict[str, Any]:
     formats = _available_formats(db_path)
     formatid = _default_home_format(formats)
+    if _format_uses_champions_sheet(formatid):
+        return _champions_home_page_context(db_path, lang)
     elo_bounds = _elo_bounds_for_format(db_path, formatid)
     footer_copy = _footer_copy_for_lang(lang)
     matches = _matches_for_window(db_path, formatid, elo_bounds["min"], elo_bounds["max"])
@@ -1199,6 +1951,8 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
         "source_url": DATASET_SOURCE_URL,
         "footer": footer_copy,
         "pokemon_winrate_warning": pokemon_winrate_warning,
+        "champions_mode": False,
+        "default_view": "pokemon",
         "initial_state": {
             "formats": formats,
             "default_format": formatid,
@@ -1207,6 +1961,8 @@ def _home_page_context(db_path: str, attacks_db_path: str, teams_db_path: str, l
             "elo_step": elo_bounds["step"],
             "types": initial_types,
             "matches": pokemon["matches"],
+            "active_view": "pokemon",
+            "champions_mode": False,
             "pokemon": {
                 "min_games": default_min_games,
                 "sort": "popularity",
@@ -1867,6 +2623,8 @@ def make_app(
     @app.get("/api/elo_bounds")
     def api_elo_bounds():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        if _format_uses_champions_sheet(formatid):
+            return jsonify({"min": 0, "max": 0, "step": 1})
         db_formatid = _format_db_id(formatid)
         conn = get_conn(db_path)
         try:
@@ -1883,6 +2641,9 @@ def make_app(
     @app.get("/api/types")
     def api_types():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        if _format_uses_champions_sheet(formatid):
+            raw = _champions_sheet_raw_data()
+            return jsonify({"types": list(raw.get("types") or [])})
         db_formatid = _format_db_id(formatid)
         allowed_keys = _special_format_allowed_key_list(formatid)
         elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
@@ -1944,6 +2705,26 @@ def make_app(
     @app.get("/api/pokemon")
     def api_pokemon():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        if _format_uses_champions_sheet(formatid):
+            q = (request.args.get("q", "") or "").strip().lower()
+            lang = _normalize_lang(request.args.get("lang", "en") or "en")
+            selected_types = _parse_types_param(request.args.get("types", "") or "")
+            sort = (request.args.get("sort", "games") or "games").strip().lower()
+            order = (request.args.get("order", "desc") or "desc").strip().lower()
+            min_games = clamp_int(request.args.get("min_games", 0), 0, 10_000_000)
+            limit = clamp_int(request.args.get("limit", DEFAULT_HOME_LIMIT), 10, 2000)
+            return jsonify(
+                _champions_pokemon_payload(
+                    formatid=formatid,
+                    q=q,
+                    lang=lang,
+                    selected_types=selected_types,
+                    sort=sort,
+                    order=order,
+                    min_games=min_games,
+                    limit=limit,
+                )
+            )
         db_formatid = _format_db_id(formatid)
         allowed_keys = _special_format_allowed_key_list(formatid)
         q = (request.args.get("q", "") or "").strip().lower()
@@ -2106,6 +2887,8 @@ def make_app(
     @app.get("/api/pokemon/<key>/detail")
     def api_pokemon_detail(key: str):
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        if _format_uses_champions_sheet(formatid):
+            return jsonify({"error": "not available"}), 404
         db_formatid = _format_db_id(formatid)
         if not _is_pokemon_allowed_for_format(formatid, key):
             return jsonify({"error": "not found"}), 404
@@ -2497,6 +3280,26 @@ def make_app(
     @app.get("/api/attacks")
     def api_attacks():
         formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        if _format_uses_champions_sheet(formatid):
+            q = (request.args.get("q", "") or "").strip().lower()
+            lang = _normalize_lang(request.args.get("lang", "en") or "en")
+            selected_types = _parse_types_param(request.args.get("types", "") or request.args.get("type", "") or "")
+            sort = (request.args.get("sort", "uses") or "uses").strip().lower()
+            order = (request.args.get("order", "desc") or "desc").strip().lower()
+            min_games = clamp_int(request.args.get("min_games", 0), 0, 10_000_000)
+            limit = clamp_int(request.args.get("limit", DEFAULT_HOME_LIMIT), 10, 2000)
+            return jsonify(
+                _champions_items_payload(
+                    formatid=formatid,
+                    q=q,
+                    lang=lang,
+                    selected_types=selected_types,
+                    sort=sort,
+                    order=order,
+                    min_games=min_games,
+                    limit=limit,
+                )
+            )
         db_formatid = _format_db_id(formatid)
         q = (request.args.get("q", "") or "").strip().lower()
         qraw = q
@@ -2632,6 +3435,21 @@ def make_app(
         order = (request.args.get("order", "desc") or "desc").strip().lower()
         limit = clamp_int(request.args.get("limit", DEFAULT_HOME_LIMIT), 10, 2000)
         combo_size = clamp_int(request.args.get("combo_size", 6), 2, 6)
+        required_member_keys = [x for x in (request.args.get("members", "") or "").split(",") if x.strip()]
+
+        if _format_uses_champions_sheet(formatid):
+            return jsonify(
+                _champions_team_payload(
+                    formatid=formatid,
+                    q=q,
+                    lang=lang,
+                    selected_types=selected_types,
+                    required_member_keys=required_member_keys,
+                    sort=(sort if sort not in {"popularity", "games", "avg_elo", "winrate"} else "date"),
+                    order=order,
+                    limit=limit,
+                )
+            )
 
         elo_min = clamp_int(request.args.get("elo_min", 0), 0, 10000)
         elo_max = clamp_int(request.args.get("elo_max", 10000), 0, 10000)
@@ -2649,7 +3467,7 @@ def make_app(
                 lang=lang,
                 q=q,
                 selected_types=selected_types,
-                required_member_keys=[x for x in (request.args.get("members", "") or "").split(",") if x.strip()],
+                required_member_keys=required_member_keys,
                 sort=sort,
                 order=order,
                 min_games=min_games,

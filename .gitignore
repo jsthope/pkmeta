@@ -4,3 +4,4 @@ pokemon-showdown-replays/
 *.db
 tools/moves.json
 __pycache__/
+cache/

@@ -20,12 +20,11 @@
   <meta name="twitter:card" content="summary"/>
   <meta name="twitter:title" content="{{ seo.title }}"/>
   <meta name="twitter:description" content="{{ seo.description }}"/>
-  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png"/>
-  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png"/>
-  <link rel="shortcut icon" href="/static/favicon.ico"/>
-  <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon-180.png"/>
-  <link rel="stylesheet" href="/static/style.css?v=20260324a">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png?v=20260411b"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png?v=20260411b"/>
+  <link rel="shortcut icon" href="/static/favicon.ico?v=20260411b"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon-180.png?v=20260411b"/>
+  <link rel="stylesheet" href="/static/style.css?v=20260411a">
   <script type="application/ld+json">
   {{ seo.json_ld | tojson }}
   </script>
@@ -59,10 +58,10 @@
   }, true);
   </script>
 </head>
-<body>
+<body data-champions-mode="{{ 'true' if home.champions_mode else 'false' }}">
   <main class="page">
     <header class="top">
-      <h1><img class="brandMark" src="/static/pkmeta-mark.svg" alt=""/>Pkmeta</h1>
+      <h1><img class="brandMark" src="/static/favicon-64.png?v=20260411b" alt=""/><span id="site_heading">{{ 'Pokémon Champions Meta' if home.champions_mode else 'Pkmeta' }}</span></h1>
       <div class="topRight">
         <div class="langSelectWrap">
           <select id="lang_select" aria-label="Language selector">
@@ -82,7 +81,7 @@
           </svg>
           <span>GitHub</span>
         </a>
-        <div class="muted" id="meta">Format: {{ "Champions" if home.formatid == "champions" else home.formatid }} • Elo: {{ home.elo_min }}-{{ home.elo_max }} • Matches: {{ home.matches_display }}</div>
+        <div class="muted" id="meta">{% if home.champions_mode %}Format: Champions • Teams: {{ home.matches_display }}{% else %}Format: {{ "Champions" if home.formatid == "champions" else home.formatid }} • Elo: {{ home.elo_min }}-{{ home.elo_max }} • Matches: {{ home.matches_display }}{% endif %}</div>
       </div>
     </header>
 
@@ -99,7 +98,7 @@
         <input id="q" placeholder="ex: Gholdengo, Dragapult…" />
       </label>
 
-      <label><span id="lbl_min_games">Min games</span>
+      <label id="min_games_wrap"{% if home.champions_mode %} hidden{% endif %}><span id="lbl_min_games">Min games</span>
         <input id="min_games" type="number" value="{{ home.min_games }}" min="0" step="1"/>
       </label>
 
@@ -107,7 +106,7 @@
         <input id="limit" type="number" value="{{ home.limit }}" min="10" step="10"/>
       </label>
 
-      <div class="rangeBlock">
+      <div id="elo_block" class="rangeBlock"{% if home.champions_mode %} hidden{% endif %}>
         <div class="muted"><span id="lbl_elo_range">Elo range</span>: <span id="elo_label">{{ home.elo_min }} - {{ home.elo_max }}</span></div>
         <div class="rangeWrap" id="elo_wrap">
           <div class="rangeTrack" id="elo_track"></div>
@@ -119,20 +118,28 @@
 
     <div class="tabsRow">
       <div class="tabs" role="tablist" aria-label="Stats views">
-        <button id="tab_pokemon" class="tabBtn isActive" role="tab" aria-selected="true">Pokemon</button>
-        <button id="tab_attacks" class="tabBtn" role="tab" aria-selected="false">Attacks</button>
-        <button id="tab_teams" class="tabBtn" role="tab" aria-selected="false">Teams</button>
+        <button id="tab_pokemon" class="tabBtn{% if home.default_view == 'pokemon' %} isActive{% endif %}" role="tab" aria-selected="{{ 'true' if home.default_view == 'pokemon' else 'false' }}">Pokemon</button>
+        <button id="tab_attacks" class="tabBtn{% if home.default_view == 'attacks' %} isActive{% endif %}" role="tab" aria-selected="{{ 'true' if home.default_view == 'attacks' else 'false' }}">{{ 'Items' if home.champions_mode else 'Attacks' }}</button>
+        <button id="tab_teams" class="tabBtn{% if home.default_view == 'teams' %} isActive{% endif %}" role="tab" aria-selected="{{ 'true' if home.default_view == 'teams' else 'false' }}">Teams</button>
       </div>
       <div id="type_filter_wrap" class="typeFilter" aria-label="Type filter"></div>
     </div>
 
-    <div id="champions_warning" class="warningBanner" role="note"{% if home.formatid != "champions" %} hidden{% endif %}>{{ ui_i18n[server_lang].championsWarning if ui_i18n[server_lang] is defined and ui_i18n[server_lang].championsWarning is defined else ui_i18n['en'].championsWarning }}</div>
+    <div id="champions_warning" class="warningBanner" role="note" hidden></div>
 
-    <div id="panel_pokemon" class="tabPanel isActive">
+    <div id="panel_pokemon" class="tabPanel{% if home.default_view == 'pokemon' %} isActive{% endif %}">
       <div id="pokemon_winrate_warning" class="warningBanner" role="alert"{% if not home.pokemon_winrate_warning.show %} hidden{% endif %}>{{ home.pokemon_winrate_warning.message or '' }}</div>
       <div class="tableWrap">
         <table>
           <thead id="pokemonHead">
+            {% if home.champions_mode %}
+            <tr>
+              <th data-sort="name">Pokemon <span class="sortInd"></span></th>
+              <th data-sort="games">Teams <span class="sortInd"></span></th>
+              <th data-sort="popularity">Usage <span class="sortInd"></span></th>
+              <th data-sort="types">Types <span class="sortInd"></span></th>
+            </tr>
+            {% else %}
             <tr>
               <th data-sort="name">Pokemon <span class="sortInd"></span></th>
               <th data-sort="winrate">Winrate <span class="sortInd"></span></th>
@@ -144,8 +151,26 @@
               <th data-sort="dmg_taken">Dmg taken %<span class="sortInd"></span></th>
               <th data-sort="avg_elo">Avg ELO <span class="sortInd"></span></th>
             </tr>
+            {% endif %}
           </thead>
           <tbody id="rows">
+            {% if home.champions_mode %}
+            {% for r in home.rows %}
+            <tr data-key="{{ r.key }}" data-name="{{ r.localized_name or r.name }}">
+              <td>
+                <div class="poke">
+                  <span class="pokeSpriteFrame"><img data-srcs='{{ r.sprite_urls | tojson }}' src="{{ r.sprite_urls[0] if r.sprite_urls else '' }}" alt="" loading="lazy" decoding="async" /></span>
+                  <div>
+                    <div class="pokeNameLine"><b>{{ r.localized_name or r.name }}</b>{% if r.mega_label %}<span class="megaBadge">{{ r.mega_label }}</span>{% endif %}</div>
+                  </div>
+                </div>
+              </td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="games" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Teams</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ fmt_int_lang(r.games, server_lang) }}</b></span></div></td>
+              <td><div class="mobileStat mobileSortStat" data-mobile-sort="popularity" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Usage</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ fmt_pct_lang(r.popularity, server_lang) }}</b></span></div></td>
+              <td>{% if r.types %}<div class="typeIcons">{% for type_name in r.types %}<img src="https://cdn.jsdelivr.net/gh/partywhale/pokemon-type-icons@main/icons/{{ type_name|lower }}.svg" alt="{{ type_name }}" title="{{ type_name }}"/>{% endfor %}</div>{% else %}<span class="muted">-</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+            {% else %}
             {% for r in home.rows %}
             <tr class="clickable" data-key="{{ r.key }}" data-name="{{ r.localized_name or r.name }}">
               <td>
@@ -175,18 +200,27 @@
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="pokemon" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ fmt_1_lang(r.avg_elo, server_lang) }}</b></span></div></td>
             </tr>
             {% endfor %}
+            {% endif %}
           </tbody>
         </table>
       </div>
-      <div class="card rulesNotice">
+      <div class="card rulesNotice"{% if home.champions_mode %} hidden{% endif %}>
         <p id="rules_notice" class="lede">Pokemon Showdown follows Smogon rules, so banned Pokemon are not included in this list.</p>
       </div>
     </div>
 
-    <div id="panel_attacks" class="tabPanel">
+    <div id="panel_attacks" class="tabPanel{% if home.default_view == 'attacks' %} isActive{% endif %}">
       <div class="tableWrap">
         <table>
           <thead id="attackHead">
+            {% if home.champions_mode %}
+            <tr>
+              <th data-attack-sort="item">Item <span class="sortInd"></span></th>
+              <th data-attack-sort="uses">Uses <span class="sortInd"></span></th>
+              <th data-attack-sort="games">Teams <span class="sortInd"></span></th>
+              <th data-attack-sort="popularity">Usage <span class="sortInd"></span></th>
+            </tr>
+            {% else %}
             <tr>
               <th data-attack-sort="move">Attack <span class="sortInd"></span></th>
               <th data-attack-sort="winrate">Winrate <span class="sortInd"></span></th>
@@ -194,8 +228,24 @@
               <th data-attack-sort="uses">Usage <span class="sortInd"></span></th>
               <th data-attack-sort="avg_elo">Avg ELO <span class="sortInd"></span></th>
             </tr>
+            {% endif %}
           </thead>
           <tbody id="attack_rows">
+            {% if home.champions_mode %}
+            {% for a in home.attack_rows %}
+            <tr>
+              <td>
+                <div class="itemCell" data-item-wrap>
+                  <img class="itemCellIcon" data-item-name="{{ a.item }}" alt="{{ a.localized_item or a.item }}" loading="lazy" decoding="async" />
+                  <span class="itemCellLabel" data-item-label>{{ a.localized_item or a.item }}</span>
+                </div>
+              </td>
+              <td>{{ fmt_int_lang(a.uses, server_lang) }}</td>
+              <td>{{ fmt_int_lang(a.games, server_lang) }}</td>
+              <td>{{ fmt_pct_lang(a.use_rate, server_lang) }}</td>
+            </tr>
+            {% endfor %}
+            {% else %}
             {% for a in home.attack_rows %}
             <tr>
               <td>
@@ -214,14 +264,15 @@
               <td>{{ fmt_1_lang(a.avg_elo, server_lang) }}</td>
             </tr>
             {% endfor %}
+            {% endif %}
           </tbody>
         </table>
       </div>
     </div>
 
-    <div id="panel_teams" class="tabPanel">
+    <div id="panel_teams" class="tabPanel{% if home.default_view == 'teams' %} isActive{% endif %}">
       <div class="teamControls">
-        <label><span id="lbl_team_size">Team size</span>
+        <label id="team_size_wrap"{% if home.champions_mode %} hidden{% endif %}><span id="lbl_team_size">Team size</span>
           <select id="combo_size">
             <option value="6" selected>6</option>
             <option value="5">5</option>
@@ -244,6 +295,15 @@
       <div class="tableWrap">
         <table>
           <thead id="teamHead">
+            {% if home.champions_mode %}
+            <tr>
+              <th data-team-sort="date">Team <span class="sortInd"></span></th>
+              <th data-team-sort="date">Date <span class="sortInd"></span></th>
+              <th data-team-sort="owner">Owner <span class="sortInd"></span></th>
+              <th data-team-sort="code">Code <span class="sortInd"></span></th>
+              <th data-team-sort="source">Source <span class="sortInd"></span></th>
+            </tr>
+            {% else %}
             <tr>
               <th data-team-sort="name">Composition <span class="sortInd"></span></th>
               <th data-team-sort="winrate">Winrate <span class="sortInd"></span></th>
@@ -251,8 +311,65 @@
               <th data-team-sort="popularity">Popularity <span class="sortInd"></span></th>
               <th data-team-sort="avg_elo">Avg ELO <span class="sortInd"></span></th>
             </tr>
+            {% endif %}
           </thead>
           <tbody id="team_rows">
+            {% if home.champions_mode %}
+            {% for item in home.team_rows %}
+            <tr>
+              <td>
+                <div class="teamComp teamCompSheet">
+                  <div class="teamSprites">
+                    {% for member in item.members %}
+                    <span class="teamSpriteWrap">
+                      <span class="teamSpriteFrame">
+                        <img class="teamSprite" data-srcs='{{ member.sprite_urls | tojson }}' src="{{ member.sprite_urls[0] if member.sprite_urls else '' }}" alt="" loading="lazy" decoding="async" />
+                      </span>
+                      {% if member.item %}
+                      <img class="teamItemIcon" data-item-name="{{ member.item }}" alt="{{ member.localized_item or member.item }}" loading="lazy" decoding="async" />
+                      {% endif %}
+                    </span>
+                    {% endfor %}
+                  </div>
+                  <div class="teamMetaStack">
+                    <div class="teamNames"><b>{{ item.label }}</b></div>
+                    {% if item.full_name %}
+                    <div class="muted">{{ item.full_name }}</div>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+              <td>{{ item.date or '-' }}</td>
+              <td>{{ item.owner or '-' }}</td>
+              <td><span class="mono">{{ item.replica_code or '-' }}</span></td>
+              <td>
+                <div class="linkList">
+                    {% if item.source_link and item.source_link != '-' %}
+                    {% if item.source_link|lower != 'discord submission' and item.source_link.startswith('http') %}
+                    <a class="sheetLink" href="{{ item.source_link }}" target="_blank" rel="noopener noreferrer">Source</a>
+                    {% elif item.source_link|lower != 'discord submission' %}
+                    <span class="sheetChip">{{ item.source_link }}</span>
+                    {% endif %}
+                  {% endif %}
+                  {% if item.report_video and item.report_video != '-' %}
+                    {% if item.report_video.startswith('http') %}
+                    <a class="sheetLink" href="{{ item.report_video }}" target="_blank" rel="noopener noreferrer">Video</a>
+                    {% else %}
+                    <span class="sheetChip">{{ item.report_video }}</span>
+                    {% endif %}
+                  {% endif %}
+                  {% if item.other_links and item.other_links != '-' %}
+                    {% if item.other_links.startswith('http') %}
+                    <a class="sheetLink" href="{{ item.other_links }}" target="_blank" rel="noopener noreferrer">Other</a>
+                    {% else %}
+                    <span class="sheetChip">{{ item.other_links }}</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+            {% else %}
             {% for item in home.team_rows %}
             <tr>
               <td>
@@ -274,6 +391,7 @@
               <td><div class="mobileStat mobileSortStat" data-mobile-sort="avg_elo" data-mobile-sort-kind="teams" role="button" tabindex="0"><span class="mobileStatLabel">Avg ELO</span><span class="mobileStatValueWrap"><span class="mobileSortInd" aria-hidden="true"></span><b class="mobileStatValue">{{ fmt_1_lang(item.avg_elo, server_lang) }}</b></span></div></td>
             </tr>
             {% endfor %}
+            {% endif %}
           </tbody>
         </table>
       </div>
@@ -375,6 +493,15 @@ let currentLang = normLang(SERVER_LANG || navigator.language || "en");
 function t(key) {
   const dict = I18N[currentLang] || I18N.en;
   return dict[key] || I18N.en[key] || key;
+}
+
+function isChampionsSheetMode(formatid = null) {
+  const resolved = String(formatid || (el("formatid") && el("formatid").value) || INITIAL_STATE.default_format || "").toLowerCase();
+  return resolved === "champions";
+}
+
+function defaultViewForFormat(formatid = null) {
+  return isChampionsSheetMode(formatid) ? "teams" : "pokemon";
 }
 
 function normalizeForSearch(s) {
@@ -493,7 +620,39 @@ function itemWikiToken(s) {
     .replace(/[^A-Za-z0-9_\-]/g, "");
   return n.replace(/_+/g, "_").replace(/^_+|_+$/g, "");
 }
-function setItemIcon(img, itemName) {
+
+const ITEM_ICON_URL_CACHE = new Map();
+const ITEM_ICON_PENDING_CACHE = new Map();
+let nextItemIconRequestId = 0;
+const CUSTOM_MEGA_STONE_POKEPEDIA_TITLES = {
+  aerodactylite: "Ptéraïte",
+  blastoisinite: "Tortankite",
+  chesnaughtite: "Blindépiquite",
+  clefablite: "Mélodelfite",
+  delphoxite: "Goupelinite",
+  dragoninite: "Dracolossite",
+  feraligite: "Aligatueurite",
+  floettite: "Floettite",
+  froslassite: "Momartikite",
+  gardevoirite: "Gardevoirite",
+  gengarite: "Ectoplasmite",
+  glimmoranite: "Floréclatite",
+  golurkite: "Golemastokite",
+  greninjite: "Amphinolite",
+  gyaradosite: "Léviatorite",
+  hawluchanite: "Brutalibrite",
+  kangaskhanite: "Kangourexite",
+  lucarionite: "Lucarite",
+  meganiumite: "Méganiumite",
+  starminite: "Starossite",
+  tyranitarite: "Tyranocivite",
+};
+
+function pokepediaMiniatureRedirect(title) {
+  return `https://www.pokepedia.fr/Special:Redirect/file/${encodeURIComponent(`Miniature_${title}_LPZA.png`)}`;
+}
+
+function itemIconCandidates(itemName) {
   const slug = itemSlug(itemName);
   const tid  = itemToId(itemName);
   const wiki = itemWikiToken(itemName);
@@ -509,43 +668,111 @@ function setItemIcon(img, itemName) {
     `${ITEM_ICON_BASE}${tid}.png`,
     `${ITEM_ICON_BASE}${tid}.gif`,
   );
+  if (CUSTOM_MEGA_STONE_POKEPEDIA_TITLES[tid]) {
+    tries.push(pokepediaMiniatureRedirect(CUSTOM_MEGA_STONE_POKEPEDIA_TITLES[tid]));
+  }
+  return [...new Set(tries)];
+}
+
+function probeImageUrl(url, timeoutMs = 4000) {
+  return new Promise((resolve) => {
+    const probe = new Image();
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      probe.onload = null;
+      probe.onerror = null;
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    probe.onload = () => finish(true);
+    probe.onerror = () => finish(false);
+    probe.src = url;
+  });
+}
+
+async function resolveItemIconUrl(itemName) {
+  const cacheKey = itemToId(itemName);
+  if (!cacheKey) return "";
+  if (ITEM_ICON_URL_CACHE.has(cacheKey)) {
+    return ITEM_ICON_URL_CACHE.get(cacheKey) || "";
+  }
+  if (ITEM_ICON_PENDING_CACHE.has(cacheKey)) {
+    return ITEM_ICON_PENDING_CACHE.get(cacheKey);
+  }
+
+  const pending = (async () => {
+    for (const url of itemIconCandidates(itemName)) {
+      if (await probeImageUrl(url)) {
+        ITEM_ICON_URL_CACHE.set(cacheKey, url);
+        ITEM_ICON_PENDING_CACHE.delete(cacheKey);
+        return url;
+      }
+    }
+    ITEM_ICON_URL_CACHE.set(cacheKey, "");
+    ITEM_ICON_PENDING_CACHE.delete(cacheKey);
+    return "";
+  })();
+
+  ITEM_ICON_PENDING_CACHE.set(cacheKey, pending);
+  return pending;
+}
+
+async function setItemIcon(img, itemName) {
   img.loading = "lazy";
   img.decoding = "async";
+  const itemWrap = img.closest("[data-item-wrap]");
+  const itemLabel = itemWrap ? itemWrap.querySelector("[data-item-label]") : null;
 
-  let idx = 0;
-  let done = false;
-  let tm = null;
-
-  const clearTm = () => {
-    if (tm) {
-      clearTimeout(tm);
-      tm = null;
-    }
+  const setLabelVisible = (visible) => {
+    if (!itemLabel) return;
+    itemLabel.hidden = !visible;
   };
 
-  const tryNext = () => {
-    clearTm();
-    if (done) return;
-    if (idx >= tries.length) {
-      done = true;
+  const rawName = String(itemName || "").trim();
+  if (!rawName || rawName === "-") {
+    img.style.display = "none";
+    img.removeAttribute("src");
+    setLabelVisible(false);
+    return;
+  }
+
+  const requestId = String(++nextItemIconRequestId);
+  img.dataset.itemIconRequestId = requestId;
+  img.style.display = "";
+  setLabelVisible(true);
+
+  const resolvedUrl = await resolveItemIconUrl(rawName);
+  if (img.dataset.itemIconRequestId !== requestId) return;
+
+  if (!resolvedUrl) {
+    img.style.display = "none";
+    img.removeAttribute("src");
+    setLabelVisible(false);
+    return;
+  }
+
+  img.onerror = () => {
+    if (img.dataset.itemIconRequestId !== requestId) return;
+    img.style.display = "none";
+    setLabelVisible(false);
+  };
+  img.src = resolvedUrl;
+  setLabelVisible(true);
+}
+
+function hydrateItemIcons(scope = document) {
+  if (!scope || typeof scope.querySelectorAll !== "function") return;
+  scope.querySelectorAll("img[data-item-name]").forEach((img) => {
+    const itemName = img.dataset.itemName || "";
+    if (!itemName || itemName === "-") {
       img.style.display = "none";
       return;
     }
-    img.src = tries[idx++];
-    tm = setTimeout(() => {
-      if (!done) tryNext();
-    }, 1000);
-  };
-
-  img.onload = () => {
-    done = true;
-    clearTm();
-  };
-  img.onerror = () => {
-    tryNext();
-  };
-
-  tryNext();
+    setItemIcon(img, itemName);
+  });
 }
 
 function preferAniFirst(spriteUrls) {
@@ -565,6 +792,24 @@ const windowMinGamesCache = {};
 
 function usageWindowKey(view, formatid, eloMin, eloMax) {
   return `${view}|${formatid}|${eloMin}|${eloMax}`;
+}
+
+function resetSortStatesForFormat(formatid = null) {
+  if (isChampionsSheetMode(formatid)) {
+    sortState.key = "games";
+    sortState.order = "desc";
+    attackSortState.key = "uses";
+    attackSortState.order = "desc";
+    teamSortState.key = "date";
+    teamSortState.order = "desc";
+    return;
+  }
+  sortState.key = "popularity";
+  sortState.order = "desc";
+  attackSortState.key = "uses";
+  attackSortState.order = "desc";
+  teamSortState.key = "popularity";
+  teamSortState.order = "desc";
 }
 
 function recommendedMinGamesFromMatches(matches) {
@@ -628,9 +873,8 @@ function updatePokemonWinrateWarning(meta) {
 function updateChampionsWarning() {
   const node = el("champions_warning");
   if (!node) return;
-  const show = el("formatid").value === "champions";
-  node.hidden = !show;
-  if (show) node.textContent = t("championsWarning");
+  node.hidden = true;
+  node.textContent = "";
 }
 
 function resetAutoMinGamesForAllViews() {
@@ -684,18 +928,18 @@ const debouncedLoadActive = (() => {
 })();
 
 const sortState = {
-  key: "popularity",
-  order: "desc",
+  key: (INITIAL_STATE.pokemon || {}).sort || (isChampionsSheetMode(INITIAL_STATE.default_format) ? "games" : "popularity"),
+  order: (INITIAL_STATE.pokemon || {}).order || "desc",
 };
 
 const attackSortState = {
-  key: "uses",
-  order: "desc",
+  key: (INITIAL_STATE.attacks || {}).sort || "uses",
+  order: (INITIAL_STATE.attacks || {}).order || "desc",
 };
 
 const teamSortState = {
-  key: "popularity",
-  order: "desc",
+  key: (INITIAL_STATE.teams || {}).sort || (isChampionsSheetMode(INITIAL_STATE.default_format) ? "date" : "popularity"),
+  order: (INITIAL_STATE.teams || {}).order || "desc",
 };
 
 const typeFilterState = {
@@ -715,12 +959,91 @@ let pokemonPickerOptionsCacheKey = `${currentLang}|${String(INITIAL_STATE.defaul
 let activeTeamSlotIndex = -1;
 const teamMemberFilters = ["", "", "", "", ""];
 
-let activeView = "pokemon";
+let activeView = String(INITIAL_STATE.active_view || defaultViewForFormat(INITIAL_STATE.default_format));
 let hasPrewarmedDetail = false;
 let usedInitialPokemon = false;
 let usedInitialAttacks = false;
 let usedInitialTeams = false;
 let teamLoadRequestId = 0;
+
+function renderPokemonHead() {
+  const champions = isChampionsSheetMode();
+  el("pokemonHead").innerHTML = champions
+    ? `<tr>
+        <th data-sort="name">${escapeHtml(t("tabPokemon"))} <span class="sortInd"></span></th>
+        <th data-sort="games">${escapeHtml(t("teamsMeta") || "Teams")} <span class="sortInd"></span></th>
+        <th data-sort="popularity">${escapeHtml(t("popularity"))} <span class="sortInd"></span></th>
+        <th data-sort="types">Types <span class="sortInd"></span></th>
+      </tr>`
+    : `<tr>
+        <th data-sort="name">${escapeHtml(t("tabPokemon"))} <span class="sortInd"></span></th>
+        <th data-sort="winrate">${escapeHtml(t("winrate"))} <span class="sortInd"></span></th>
+        <th data-sort="games">${escapeHtml(t("games"))} <span class="sortInd"></span></th>
+        <th data-sort="popularity">${escapeHtml(t("popularity"))} <span class="sortInd"></span></th>
+        <th data-sort="lead_rate">${escapeHtml(t("leadRate"))} <span class="sortInd"></span></th>
+        <th data-sort="kd">${escapeHtml(t("wilsonLb"))} <span class="sortInd"></span></th>
+        <th data-sort="dmg_dealt">${escapeHtml(t("dmgDealt"))} <span class="sortInd"></span></th>
+        <th data-sort="dmg_taken">${escapeHtml(t("dmgTaken"))} <span class="sortInd"></span></th>
+        <th data-sort="avg_elo">${escapeHtml(t("avgElo"))} <span class="sortInd"></span></th>
+      </tr>`;
+}
+
+function renderAttackHead() {
+  const champions = isChampionsSheetMode();
+  el("attackHead").innerHTML = champions
+    ? `<tr>
+        <th data-attack-sort="item">${escapeHtml(t("items"))} <span class="sortInd"></span></th>
+        <th data-attack-sort="uses">${escapeHtml(t("uses"))} <span class="sortInd"></span></th>
+        <th data-attack-sort="games">${escapeHtml(t("teamsMeta") || "Teams")} <span class="sortInd"></span></th>
+        <th data-attack-sort="popularity">${escapeHtml(t("popularity"))} <span class="sortInd"></span></th>
+      </tr>`
+    : `<tr>
+        <th data-attack-sort="move">${escapeHtml(t("attack"))} <span class="sortInd"></span></th>
+        <th data-attack-sort="winrate">${escapeHtml(t("winrate"))} <span class="sortInd"></span></th>
+        <th data-attack-sort="games">${escapeHtml(t("games"))} <span class="sortInd"></span></th>
+        <th data-attack-sort="uses">${escapeHtml(t("popularity"))} <span class="sortInd"></span></th>
+        <th data-attack-sort="avg_elo">${escapeHtml(t("avgElo"))} <span class="sortInd"></span></th>
+      </tr>`;
+}
+
+function renderTeamHead() {
+  const champions = isChampionsSheetMode();
+  el("teamHead").innerHTML = champions
+    ? `<tr>
+        <th data-team-sort="date">${escapeHtml(t("teamComposition"))} <span class="sortInd"></span></th>
+        <th data-team-sort="date">${escapeHtml(t("date"))} <span class="sortInd"></span></th>
+        <th data-team-sort="owner">${escapeHtml(t("owner"))} <span class="sortInd"></span></th>
+        <th data-team-sort="code">${escapeHtml(t("code"))} <span class="sortInd"></span></th>
+        <th data-team-sort="source">${escapeHtml(t("source"))} <span class="sortInd"></span></th>
+      </tr>`
+    : `<tr>
+        <th data-team-sort="name">${escapeHtml(t("teamComposition"))} <span class="sortInd"></span></th>
+        <th data-team-sort="winrate">${escapeHtml(t("winrate"))} <span class="sortInd"></span></th>
+        <th data-team-sort="games">${escapeHtml(t("games"))} <span class="sortInd"></span></th>
+        <th data-team-sort="popularity">${escapeHtml(t("popularity"))} <span class="sortInd"></span></th>
+        <th data-team-sort="avg_elo">${escapeHtml(t("avgElo"))} <span class="sortInd"></span></th>
+      </tr>`;
+}
+
+function renderTableHeads() {
+  renderPokemonHead();
+  renderAttackHead();
+  renderTeamHead();
+  initSortHeaders();
+}
+
+function updateFormatModeUI() {
+  const champions = isChampionsSheetMode();
+  document.body.dataset.championsMode = champions ? "true" : "false";
+  if (el("site_heading")) el("site_heading").textContent = champions ? "Pokémon Champions Meta" : "Pkmeta";
+  if (el("min_games_wrap")) el("min_games_wrap").hidden = champions;
+  if (el("elo_block")) el("elo_block").hidden = champions;
+  if (el("team_size_wrap")) el("team_size_wrap").hidden = champions;
+  if (el("tab_attacks")) el("tab_attacks").textContent = champions ? t("items") : t("tabAttacks");
+  const rulesCard = el("rules_notice") ? el("rules_notice").closest(".rulesNotice") : null;
+  if (rulesCard) rulesCard.hidden = champions;
+  renderTableHeads();
+}
 
 function applyI18n() {
   document.documentElement.lang = currentLang;
@@ -731,12 +1054,12 @@ function applyI18n() {
   el("lbl_limit").textContent = t("maxResults");
   el("lbl_elo_range").textContent = t("eloRange");
   el("tab_pokemon").textContent = t("tabPokemon");
-  el("tab_attacks").textContent = t("tabAttacks");
   el("tab_teams").textContent = t("tabTeams");
   el("lbl_team_size").textContent = t("teamSize");
   el("lbl_team_members").textContent = t("teamFilter");
   el("team_picker_search").placeholder = t("searchPokemon");
   el("rules_notice").textContent = t("rulesNotice");
+  updateFormatModeUI();
   updateChampionsWarning();
   if (el("pokemon_winrate_warning").hidden !== true && !el("pokemon_winrate_warning").textContent) {
     updatePokemonWinrateWarning((INITIAL_STATE.pokemon || {}).winrate_warning || null);
@@ -745,66 +1068,6 @@ function applyI18n() {
   if (!el("meta").textContent || /loading|chargement/i.test(el("meta").textContent)) {
     el("meta").textContent = t("loadingDots");
   }
-
-  const pokemonHeaders = {
-    name: t("tabPokemon"),
-    winrate: t("winrate"),
-    games: t("games"),
-    popularity: t("popularity"),
-    lead_rate: t("leadRate"),
-    kd: t("wilsonLb"),
-    dmg_dealt: t("dmgDealt"),
-    dmg_taken: t("dmgTaken"),
-    avg_elo: t("avgElo"),
-  };
-  document.querySelectorAll("#pokemonHead th[data-sort]").forEach(th => {
-    const key = th.dataset.sort;
-    const ind = th.querySelector(".sortInd");
-    th.childNodes[0].textContent = (pokemonHeaders[key] || key) + " ";
-    if (ind && !th.contains(ind)) th.appendChild(ind);
-  });
-
-  const attackHeaders = {
-    move: t("attack"),
-    winrate: t("winrate"),
-    games: t("games"),
-    uses: t("popularity"),
-    avg_elo: t("avgElo"),
-  };
-  document.querySelectorAll("#attackHead th[data-attack-sort]").forEach(th => {
-    const key = th.dataset.attackSort;
-    const ind = th.querySelector(".sortInd");
-    th.childNodes[0].textContent = (attackHeaders[key] || key) + " ";
-    if (ind && !th.contains(ind)) th.appendChild(ind);
-  });
-
-  const teamHeaders = {
-    name: t("teamComposition"),
-    winrate: t("winrate"),
-    games: t("games"),
-    popularity: t("popularity"),
-    avg_elo: t("avgElo"),
-  };
-  document.querySelectorAll("#teamHead th[data-team-sort]").forEach(th => {
-    const key = th.dataset.teamSort;
-    const ind = th.querySelector(".sortInd");
-    th.childNodes[0].textContent = (teamHeaders[key] || key) + " ";
-    if (ind && !th.contains(ind)) th.appendChild(ind);
-  });
-
-  const pokemonMobileLabels = [t("winrate"), t("games"), t("popularity"), t("leadRate"), t("wilsonLb"), t("dmgDealt"), t("dmgTaken"), t("avgElo")];
-  document.querySelectorAll("#rows tr").forEach(tr => {
-    tr.querySelectorAll(".mobileStatLabel").forEach((labelEl, idx) => {
-      if (pokemonMobileLabels[idx]) labelEl.textContent = pokemonMobileLabels[idx];
-    });
-  });
-
-  const teamMobileLabels = [t("winrate"), t("games"), t("popularity"), t("avgElo")];
-  document.querySelectorAll("#team_rows tr").forEach(tr => {
-    tr.querySelectorAll(".mobileStatLabel").forEach((labelEl, idx) => {
-      if (teamMobileLabels[idx]) labelEl.textContent = teamMobileLabels[idx];
-    });
-  });
 
   renderTeamMemberSlots();
 }
@@ -845,6 +1108,10 @@ function formatLabel(formatid) {
 }
 
 function setMetaText(formatid, eloMin, eloMax, matches) {
+  if (isChampionsSheetMode(formatid)) {
+    el("meta").textContent = `${t("formatMeta")}: ${formatLabel(formatid)} • ${t("teamsMeta")}: ${fmtInt(matches)}`;
+    return;
+  }
   el("meta").textContent = `${t("formatMeta")}: ${formatLabel(formatid)} • ${t("eloMeta")}: ${fmtInt(eloMin)}-${fmtInt(eloMax)} • ${t("matchesMeta")}: ${fmtInt(matches)}`;
 }
 
@@ -1022,14 +1289,17 @@ function applyTeamMemberFilters() {
 }
 
 function defaultOrderForKey(k){
+  if (isChampionsSheetMode()) return (k === "name" || k === "types") ? "asc" : "desc";
   return (k === "name") ? "asc" : "desc";
 }
 
 function defaultOrderForAttack(k){
+  if (isChampionsSheetMode()) return (k === "item") ? "asc" : "desc";
   return (k === "move" || k === "type") ? "asc" : "desc";
 }
 
 function defaultOrderForTeam(k){
+  if (isChampionsSheetMode()) return (k === "date") ? "desc" : "asc";
   return (k === "name") ? "asc" : "desc";
 }
 
@@ -1217,20 +1487,78 @@ function hydrateTeamPreloadedRows() {
   el("team_rows").querySelectorAll("img[data-srcs]").forEach(img => {
     img.onerror = function() { nextSprite(this); };
   });
+  hydrateItemIcons(el("team_rows"));
+}
+
+function isHttpUrl(value) {
+  return /^https?:\/\//i.test(String(value || "").trim());
+}
+
+function megaBadgeHtml(label) {
+  return label ? `<span class="megaBadge">${escapeHtml(label)}</span>` : "";
+}
+
+function teamSpriteGridHtml(members) {
+  return (Array.isArray(members) ? members : []).map((member) => {
+    const srcs = Array.isArray(member.sprite_urls) ? member.sprite_urls : [];
+    const firstSrc = srcs[0] || "";
+    const itemIcon = member.item
+      ? `<img class="teamItemIcon" data-item-name="${escapeHtml(member.item)}" alt="${escapeHtml(member.localized_item || member.item)}" loading="lazy" decoding="async" />`
+      : "";
+    return `<span class="teamSpriteWrap"><span class="teamSpriteFrame"><img class="teamSprite" data-srcs='${JSON.stringify(srcs)}' src="${firstSrc}" alt="" loading="lazy" decoding="async" /></span>${itemIcon}</span>`;
+  }).join("");
+}
+
+function renderSheetLink(value, label) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "-" || raw.toLowerCase() === "discord submission") return "";
+  if (isHttpUrl(raw)) {
+    return `<a class="sheetLink" href="${escapeHtml(raw)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
+  }
+  return `<span class="sheetChip">${escapeHtml(raw)}</span>`;
+}
+
+function championsTeamCellHtml(item) {
+  const members = Array.isArray(item.members) ? item.members : [];
+  return `
+    <div class="teamComp teamCompSheet">
+      <div class="teamSprites">${teamSpriteGridHtml(members)}</div>
+      <div class="teamMetaStack">
+        <div class="teamNames"><b>${escapeHtml(item.label || item.member_summary || item.team_id || "-")}</b></div>
+        ${item.full_name ? `<div class="muted">${escapeHtml(item.full_name)}</div>` : ""}
+      </div>
+    </div>`;
 }
 
 function renderAttackRows(items) {
   const tbody = el("attack_rows");
   tbody.innerHTML = "";
+  const champions = isChampionsSheetMode();
 
   if (!items.length) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 5;
+    td.colSpan = champions ? 4 : 5;
     td.className = "muted";
     td.textContent = t("noAttackData");
     tr.appendChild(td);
     tbody.appendChild(tr);
+    return;
+  }
+
+  if (champions) {
+    for (const item of items) {
+      const tr = document.createElement("tr");
+      const td0 = document.createElement("td");
+      td0.innerHTML = `<div class="itemCell" data-item-wrap><img class="itemCellIcon" data-item-name="${escapeHtml(item.item || "")}" alt="${escapeHtml(item.localized_item || item.item || "")}" loading="lazy" decoding="async" /><span class="itemCellLabel" data-item-label>${escapeHtml(item.localized_item || item.item || "-")}</span></div>`;
+      tr.appendChild(td0);
+      const td1 = document.createElement("td"); td1.textContent = fmtInt(item.uses || 0); tr.appendChild(td1);
+      const td2 = document.createElement("td"); td2.textContent = fmtInt(item.games || 0); tr.appendChild(td2);
+      const td3 = document.createElement("td"); td3.textContent = fmtPct(item.use_rate || 0); tr.appendChild(td3);
+      tbody.appendChild(tr);
+    }
+    hydrateItemIcons(tbody);
+    updateAttackSortIndicators();
     return;
   }
 
@@ -1248,6 +1576,7 @@ function renderAttackRows(items) {
 function renderTeamRows(items, comboSizeFallback) {
   const tbody = el("team_rows");
   tbody.innerHTML = "";
+  const champions = isChampionsSheetMode();
   const selectedMembers = new Set(selectedTeamMemberKeys());
   const filteredItems = (Array.isArray(items) ? items : []).filter(item => {
     if (!selectedMembers.size) return true;
@@ -1266,6 +1595,27 @@ function renderTeamRows(items, comboSizeFallback) {
     td.textContent = t("noTeamData");
     tr.appendChild(td);
     tbody.appendChild(tr);
+    return;
+  }
+
+  if (champions) {
+    for (const item of filteredItems) {
+      const tr = document.createElement("tr");
+      const td0 = document.createElement("td"); td0.innerHTML = championsTeamCellHtml(item); tr.appendChild(td0);
+      const td1 = document.createElement("td"); td1.textContent = item.date || "-"; tr.appendChild(td1);
+      const td2 = document.createElement("td"); td2.textContent = item.owner || "-"; tr.appendChild(td2);
+      const td3 = document.createElement("td"); td3.innerHTML = `<span class="mono">${escapeHtml(item.replica_code || "-")}</span>`; tr.appendChild(td3);
+      const td4 = document.createElement("td");
+      td4.innerHTML = `<div class="linkList">${[
+        renderSheetLink(item.source_link, t("source")),
+        renderSheetLink(item.report_video, "Video"),
+        renderSheetLink(item.other_links, "Other"),
+      ].filter(Boolean).join("")}</div>`;
+      tr.appendChild(td4);
+      tbody.appendChild(tr);
+    }
+    hydrateTeamPreloadedRows();
+    updateTeamSortIndicators();
     return;
   }
 
@@ -1304,6 +1654,7 @@ function useInitialPreloadedView(view) {
     if (parseInt(el("min_games").value || "0", 10) !== Number((INITIAL_STATE.attacks || {}).min_games || 0)) return false;
     if (attackSortState.key !== (INITIAL_STATE.attacks || {}).sort || attackSortState.order !== (INITIAL_STATE.attacks || {}).order) return false;
     setDefaultMeta();
+    if (isChampionsSheetMode()) hydrateItemIcons(el("attack_rows"));
     return true;
   }
 
@@ -1331,10 +1682,11 @@ function hydrateInitialState() {
   for (const f of INITIAL_STATE.formats) {
     const opt = document.createElement("option");
     opt.value = f;
-    opt.textContent = f;
+    opt.textContent = formatLabel(f);
     sel.appendChild(opt);
   }
   sel.value = INITIAL_STATE.default_format || sel.value;
+  updateFormatModeUI();
 
   const smin = el("elo_min");
   const smax = el("elo_max");
@@ -1360,6 +1712,7 @@ function hydrateInitialState() {
   el("min_games").value = String((INITIAL_STATE.pokemon || {}).min_games || 0);
   el("limit").value = String(INITIAL_STATE.limit || 50);
   hydratePokemonPreloadedRows();
+  hydrateItemIcons(el("attack_rows"));
   hydrateTeamPreloadedRows();
   usedInitialPokemon = true;
   usedInitialAttacks = true;
@@ -1439,6 +1792,8 @@ async function applyUrlParams(u) {
     const sel = el("formatid");
     if ([...sel.options].some(o => o.value === u.format)) sel.value = u.format;
   }
+  resetSortStatesForFormat(el("formatid").value);
+  updateFormatModeUI();
   updateChampionsWarning();
   const smin = el("elo_min"), smax = el("elo_max");
   if (u.elo_min !== null) smin.value = Math.max(parseInt(smin.min || "0", 10), u.elo_min);
@@ -1450,7 +1805,7 @@ async function applyUrlParams(u) {
   if (u.attack_order) attackSortState.order = u.attack_order;
   if (u.team_sort) teamSortState.key = u.team_sort;
   if (u.team_order) teamSortState.order = u.team_order;
-  const targetView = u.view || "pokemon";
+  const targetView = u.view || defaultViewForFormat(el("formatid").value);
   if (targetView !== activeView) setView(targetView);
   if (u.type) typeFilterState[activeView] = u.type;
   if (u.q !== null) { el("q").value = u.q; activeViewState().q = u.q; }
@@ -1630,6 +1985,7 @@ function sortableMobileStatHtml(label, value, sortKey, sortKind) {
 }
 
 function prewarmDetailIfNeeded(items, f) {
+  if (isChampionsSheetMode(f && f.formatid)) return;
   if (hasPrewarmedDetail) return;
   const first = Array.isArray(items) ? items.find(x => x && x.key) : null;
   if (!first) return;
@@ -1646,6 +2002,7 @@ function prewarmDetailIfNeeded(items, f) {
 
 async function loadList() {
   const f = getFilters();
+  const champions = isChampionsSheetMode(f.formatid);
   updateEloUI();
   updateSortIndicators();
   if (useInitialPreloadedView("pokemon")) return;
@@ -1697,6 +2054,7 @@ async function loadList() {
     switch (f.sort) {
       case "popularity": return Number(it.popularity) || 0;
       case "games": return Number(it.games) || 0;
+      case "types": return (Array.isArray(it.types) ? it.types.join("/") : "").toLowerCase();
       case "avg_elo": return Number(it.avg_elo) || 0;
       case "lead_rate": return Number(it.lead_rate) || 0;
       case "kd": return Number(it.kd) || 0;
@@ -1734,6 +2092,37 @@ async function loadList() {
 
   const tbody = el("rows");
   tbody.innerHTML = "";
+
+  if (champions) {
+    for (const r of items) {
+      const tr = document.createElement("tr");
+      tr.dataset.key = r.key || "";
+      tr.dataset.name = r.localized_name || r.name || "";
+
+      const td0 = document.createElement("td");
+      const srcs = Array.isArray(r.sprite_urls) ? r.sprite_urls : [];
+      const firstSrc = srcs[0] || "";
+      td0.innerHTML = `
+        <div class="poke">
+          <span class="pokeSpriteFrame"><img data-srcs='${JSON.stringify(srcs)}' src="${firstSrc}" alt="" loading="lazy" decoding="async" /></span>
+          <div>
+            <div class="pokeNameLine"><b>${escapeHtml(r.localized_name || r.name || "-")}</b>${megaBadgeHtml(r.mega_label || "")}</div>
+          </div>
+        </div>`;
+      tr.appendChild(td0);
+      const img = td0.querySelector("img");
+      if (img) img.onerror = function() { nextSprite(this); };
+
+      const td1 = document.createElement("td"); td1.innerHTML = sortableMobileStatHtml(t("teamsMeta"), fmtInt(r.games || 0), "games", "pokemon"); tr.appendChild(td1);
+      const td2 = document.createElement("td"); td2.innerHTML = sortableMobileStatHtml(t("popularity"), fmtPct(r.popularity || 0), "popularity", "pokemon"); tr.appendChild(td2);
+      const td3 = document.createElement("td"); td3.innerHTML = typeIconsHtml(r.types); tr.appendChild(td3);
+      tbody.appendChild(tr);
+    }
+    updateSortIndicators();
+    usedInitialPokemon = false;
+    updateUrlState();
+    return;
+  }
 
   for (const r of items) {
     const tr = document.createElement("tr");
@@ -2499,6 +2888,7 @@ async function renderDetailHeaderControls(state) {
 
 async function loadDetail(key, nameHint, detailFilters = null) {
   const pageFilters = getFilters();
+  if (isChampionsSheetMode((detailFilters && detailFilters.formatid) || pageFilters.formatid)) return;
   const detailState = detailFilters || {
     formatid: pageFilters.formatid,
     elo_min: pageFilters.elo_min,
@@ -2637,9 +3027,9 @@ async function loadDetail(key, nameHint, detailFilters = null) {
       const u = Number(x.uses) || 0;
       const p = (100 * u / itemsTot);
       return `<div class="listLine">
-        <div style="display:flex; align-items:center; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px;" data-item-wrap>
           <img class="itemico" id="itimg_${idx}" alt="" loading="lazy" decoding="async"/>
-          <div>${escapeHtml(x.localized_item || x.item)}</div>
+          <div data-item-label>${escapeHtml(x.localized_item || x.item)}</div>
         </div>
         <div class="mono">${fmtPct1(p)}</div>
       </div>`;
@@ -2707,6 +3097,7 @@ el("limit").addEventListener("change", debouncedLoadActive);
 
 el("rows").addEventListener("click", (e) => {
   if (window.matchMedia("(max-width: 720px)").matches && e.target.closest(".mobileSortStat")) return;
+  if (isChampionsSheetMode()) return;
   const tr = e.target.closest("tr[data-key]");
   if (!tr || !el("rows").contains(tr)) return;
   loadDetail(tr.dataset.key || "", tr.dataset.name || "");
@@ -2797,6 +3188,16 @@ el("lang_select").addEventListener("change", () => {
 el("formatid").addEventListener("change", async () => {
   saveSearchStateForView(activeView);
   resetAutoMinGamesForAllViews();
+  if (isChampionsSheetMode(el("formatid").value)) {
+    Object.values(viewSearchState).forEach((state) => {
+      state.min_games = "0";
+      state.recommended_min_games = 0;
+    });
+    el("min_games").value = "0";
+  }
+  resetSortStatesForFormat(el("formatid").value);
+  updateFormatModeUI();
+  setView(defaultViewForFormat(el("formatid").value));
   updateChampionsWarning();
   typeOptionsCache.pokemon = { key: "", types: [] };
   typeOptionsCache.attacks = { key: "", types: [] };
@@ -2891,8 +3292,7 @@ function initSortHeaders(){
   localStorage.setItem("pkmeta_lang", currentLang);
   el("lang_select").value = currentLang;
   applyI18n();
-  initSortHeaders();
-  setView("pokemon");
+  setView(defaultViewForFormat(INITIAL_STATE.default_format));
 
   const urlState = readUrlParams();
   const hasUrlState = location.search.length > 1;
@@ -2905,6 +3305,7 @@ function initSortHeaders(){
     if (!hydrated) {
       await initFormats();
       await initEloBounds();
+      setView(defaultViewForFormat(el("formatid").value));
     }
     await applyUrlParams(urlState);
     await initTypeFilters();
@@ -2923,8 +3324,18 @@ function initSortHeaders(){
   } else if (!hydrated) {
     await initFormats();
     await initEloBounds();
+    updateFormatModeUI();
+    setView(defaultViewForFormat(el("formatid").value));
     await initTypeFilters();
-    await loadList();
+    if (activeView === "teams") {
+      await ensurePokemonPickerOptions(el("formatid").value);
+      renderTeamMemberSlots();
+      await loadTeams();
+    } else if (activeView === "attacks") {
+      await loadAttacks();
+    } else {
+      await loadList();
+    }
   }
 })();
 </script>

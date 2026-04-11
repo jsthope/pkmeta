@@ -9,6 +9,7 @@ services:
       - PKMETA_DB=/app/stats.sqlite
       - PKMETA_ATTACKS_DB=/app/attacks.sqlite
       - PKMETA_TEAMS_DB=/app/teams-by-format
+      - PKMETA_CHAMPIONS_SHEET_CACHE=/cache/champions_sheet_rows.json
       - PKMETA_CANONICAL_HOST=pokemonchampionsmeta.net
       - PKMETA_SECONDARY_HOSTS=pkmeta.net,www.pkmeta.net,www.pokemonchampionsmeta.net
       - PKMETA_SITE_BRAND=Pkmeta
@@ -16,6 +17,7 @@ services:
       - ../../stats.sqlite:/app/stats.sqlite:ro
       - ../../attacks.sqlite:/app/attacks.sqlite:ro
       - ../../teams-by-format:/app/teams-by-format
+      - ../../cache:/cache
     restart: unless-stopped
 
   caddy:
