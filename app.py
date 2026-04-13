@@ -89,8 +89,8 @@ DEFAULT_HOME_TEAM_SIZE = 6
 DEFAULT_TEAM_MIN_GAMES = 100
 SPECIAL_FORMAT_CHAMPIONS = "champions"
 SPECIAL_FORMAT_BASE = {SPECIAL_FORMAT_CHAMPIONS: "all"}
-# Snapshot of Bulbapedia's Pokemon Champions list, including regional forms,
-# Mega Evolutions, and the other forms listed on the same page.
+# Snapshot of the Pokemon Champions roster, including regional forms,
+# Mega Evolutions, and the other forms listed on the current roster pages.
 CHAMPIONS_ALLOWED_POKEMON_KEYS = frozenset(
     """
     venusaur charizard blastoise beedrill pidgeot arbok pikachu raichu raichualola clefable
@@ -135,6 +135,7 @@ CHAMPIONS_ALLOWED_POKEMON_KEYS = frozenset(
     """.split()
 )
 CHAMPIONS_ALLOWED_POKEMON_KEY_LIST = tuple(sorted(CHAMPIONS_ALLOWED_POKEMON_KEYS))
+CHAMPIONS_COSMETIC_BASE_SPECIES_PREFIXES = ("alcremie", "furfrou", "vivillon")
 _PICKER_MERGE_TO_BASE = {"minior", "florges", "squawkabilly", "pikachu"}
 DATASET_SOURCE_NAME = "pokemon-showdown-replays"
 DATASET_SOURCE_URL = "https://huggingface.co/datasets/HolidayOugi/pokemon-showdown-replays"
@@ -256,6 +257,8 @@ def sprite_urls(key: str, name: str) -> List[str]:
             if slug2 != slug:
                 add_url(f"{base}{slug2}.png")
 
+    add_variant(name)
+
     base_fallback_key = ""
     for candidate_key in _champions_pokemon_key_candidates(name, key):
         mega_parts = _mega_form_parts(candidate_key)
@@ -269,7 +272,6 @@ def sprite_urls(key: str, name: str) -> List[str]:
             add_url(custom_url)
         add_variant(candidate_key)
 
-    add_variant(name)
     add_variant(key)
 
     if base_fallback_key:
@@ -508,6 +510,69 @@ def _resolve_champions_member_identity(name: str, identity_map: Dict[str, Dict[s
     return (_to_id(raw_name), raw_name)
 
 
+def _champions_roster_lookup_candidate_ids(
+    key: str,
+    name: str,
+    identity_map: Dict[str, Dict[str, Any]],
+) -> List[str]:
+    out: List[str] = []
+
+    def add(candidate: str) -> None:
+        cid = _to_id(candidate)
+        if cid and cid not in out:
+            out.append(cid)
+
+    raw_key = str(key or "")
+    raw_name = str(name or "")
+    add(raw_key)
+    add(raw_name)
+    for candidate in _champions_pokemon_key_candidates(raw_name, raw_key):
+        add(candidate)
+
+    info = identity_map.get(_to_id(raw_key)) or identity_map.get(_to_id(raw_name)) or {}
+    base_species = str(info.get("base_species") or "")
+    forme = str(info.get("forme") or "")
+    if base_species and forme:
+        add(f"{base_species}-{forme}")
+        add(f"{base_species}-{forme}-mask")
+        add(f"{base_species}-{forme}-style")
+    if base_species:
+        add(base_species)
+
+    kid = _to_id(raw_key or raw_name)
+    for prefix in CHAMPIONS_COSMETIC_BASE_SPECIES_PREFIXES:
+        if kid.startswith(prefix) and kid != prefix:
+            add(prefix)
+            break
+
+    return out
+
+
+def _champions_lookup_map_value(
+    mapping: Dict[str, Any],
+    key: str,
+    name: str,
+    identity_map: Dict[str, Dict[str, Any]],
+    default: Any,
+) -> Any:
+    for candidate_id in _champions_roster_lookup_candidate_ids(key, name, identity_map):
+        if candidate_id in mapping:
+            return mapping[candidate_id]
+    return default
+
+
+def _cosmetic_form_parts(form_name: str, base_name: str) -> Tuple[str, str, str]:
+    raw_form_name = str(form_name or "").strip()
+    raw_base_name = str(base_name or "").strip()
+    form_key = _to_id(raw_form_name)
+    if not form_key:
+        return ("", raw_form_name, "")
+    forme = raw_form_name
+    if raw_base_name and raw_form_name.lower().startswith(f"{raw_base_name.lower()}-"):
+        forme = raw_form_name[len(raw_base_name) + 1 :]
+    return (form_key, raw_form_name, forme)
+
+
 def _clean_champions_link_value(value: str) -> str:
     raw = str(value or "").strip()
     if not raw or raw == "-":
@@ -574,7 +639,7 @@ def _champions_sheet_raw_data() -> Dict[str, Any]:
             if not member_name:
                 continue
             key, canonical_name = _resolve_champions_member_identity(member_name, identity_map)
-            types = poke_type_map.get(key, poke_type_map.get(_to_id(member_name), []))
+            types = _champions_lookup_map_value(poke_type_map, key, member_name, identity_map, [])
             mega_label = _mega_badge_for_name(canonical_name or member_name)
             slots.append(
                 {
@@ -704,6 +769,58 @@ def _champions_member_payload(slot: Dict[str, Any], lang: str) -> Dict[str, Any]
     }
 
 
+def _champions_speed_payload(
+    formatid: str,
+    q: str,
+    lang: str,
+    selected_types: Set[str],
+    limit: int,
+) -> Dict[str, Any]:
+    raw = _champions_sheet_raw_data()
+    total_teams = int(raw.get("team_count") or 0)
+    pokedex_json_path = os.environ.get("PKMETA_POKEDEX_JSON", "")
+    localized_name_map = load_pokemon_localized_name_map(lang)
+    poke_type_map = load_pokedex_type_map(pokedex_json_path)
+    poke_stats_map = load_pokedex_base_stats_map(pokedex_json_path)
+    identity_map = load_pokedex_identity_map(pokedex_json_path)
+    qraw = (q or "").strip().lower()
+    qid = _to_id(qraw)
+    items: List[Dict[str, Any]] = []
+
+    for key in CHAMPIONS_ALLOWED_POKEMON_KEY_LIST:
+        identity = identity_map.get(key) or {}
+        name = str(raw.get("pokemon_names", {}).get(key) or identity.get("name") or key)
+        localized_name = localized_name_map.get(key, localized_name_map.get(_to_id(name), name))
+        types = _champions_lookup_map_value(poke_type_map, key, name, identity_map, [])
+        if selected_types and not selected_types.intersection(types):
+            continue
+        if not _matches_search(qraw, qid, name, localized_name, key):
+            continue
+        base_stats = _champions_lookup_map_value(poke_stats_map, key, name, identity_map, {}) or {}
+        items.append(
+            {
+                "key": key,
+                "name": name,
+                "localized_name": localized_name,
+                "speed": int(base_stats.get("spe", 0) or 0),
+                "types": types,
+                "sprite_urls": sprite_urls(key, name),
+            }
+        )
+
+    items.sort(key=lambda x: (-x["speed"], (x["localized_name"] or x["name"]).lower(), x["key"]))
+    for idx, item in enumerate(items, start=1):
+        item["rank"] = idx
+
+    return {
+        "formatid": formatid,
+        "elo_min": 0,
+        "elo_max": 0,
+        "items": items[:limit],
+        "meta": {"matches": total_teams, "min_games_default": 0},
+    }
+
+
 def _champions_pokemon_payload(
     formatid: str,
     q: str,
@@ -717,7 +834,9 @@ def _champions_pokemon_payload(
     raw = _champions_sheet_raw_data()
     total_teams = int(raw.get("team_count") or 0)
     localized_name_map = load_pokemon_localized_name_map(lang)
-    poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+    pokedex_json_path = os.environ.get("PKMETA_POKEDEX_JSON", "")
+    poke_type_map = load_pokedex_type_map(pokedex_json_path)
+    identity_map = load_pokedex_identity_map(pokedex_json_path)
     qraw = (q or "").strip().lower()
     qid = _to_id(qraw)
     items: List[Dict[str, Any]] = []
@@ -728,7 +847,7 @@ def _champions_pokemon_payload(
             continue
         name = str(raw.get("pokemon_names", {}).get(key) or key)
         localized_name = localized_name_map.get(key, localized_name_map.get(_to_id(name), name))
-        types = poke_type_map.get(key, [])
+        types = _champions_lookup_map_value(poke_type_map, key, name, identity_map, [])
         if selected_types and not selected_types.intersection(types):
             continue
         if not _matches_search(qraw, qid, name, localized_name, key):
@@ -987,6 +1106,11 @@ def load_pokedex_type_map(local_json_path: str = "") -> Dict[str, List[str]]:
             if nid and nid not in out:
                 out[nid] = types
 
+            for cosmetic_name in v.get("cosmeticFormes") or []:
+                cosmetic_key, _, _ = _cosmetic_form_parts(str(cosmetic_name), nm)
+                if cosmetic_key and cosmetic_key not in out:
+                    out[cosmetic_key] = types
+
     _POKEDEX_TYPE_CACHE = out
     return out
 
@@ -1087,6 +1211,11 @@ def load_pokedex_base_stats_map(local_json_path: str = "") -> Dict[str, Dict[str
             if nid and nid not in out:
                 out[nid] = bs
 
+            for cosmetic_name in v.get("cosmeticFormes") or []:
+                cosmetic_key, _, _ = _cosmetic_form_parts(str(cosmetic_name), nm)
+                if cosmetic_key and cosmetic_key not in out:
+                    out[cosmetic_key] = bs
+
     _POKEDEX_BASE_STATS_CACHE = out
     return out
 
@@ -1174,6 +1303,19 @@ def load_pokedex_identity_map(local_json_path: str = "") -> Dict[str, Dict[str, 
             }
             out[kid] = entry
 
+            base_name = str(v.get("name") or "")
+            for cosmetic_name in v.get("cosmeticFormes") or []:
+                cosmetic_key, cosmetic_display_name, cosmetic_forme = _cosmetic_form_parts(str(cosmetic_name), base_name)
+                if not cosmetic_key or cosmetic_key in out:
+                    continue
+                out[cosmetic_key] = {
+                    "key": cosmetic_key,
+                    "name": cosmetic_display_name,
+                    "num": int(v.get("num") or 0),
+                    "base_species": base_name,
+                    "forme": cosmetic_forme,
+                }
+
     _POKEDEX_IDENTITY_CACHE = out
     return out
 
@@ -1236,6 +1378,7 @@ def _seo_context_for_lang(lang: str) -> Dict[str, Any]:
         lang_norm = "en"
 
     copy = SEO_COPY.get(lang_norm, SEO_COPY["en"])
+    head_title = "Pokémon Champions Meta Teams" if DEFAULT_HOME_FORMAT == SPECIAL_FORMAT_CHAMPIONS else copy["title"]
     canonical = _language_url(lang_norm)
     alternates = [{"lang": "x-default", "href": _language_url("en")}]
     alternates.extend({"lang": x, "href": _language_url(x)} for x in SUPPORTED_LANGS)
@@ -1244,6 +1387,7 @@ def _seo_context_for_lang(lang: str) -> Dict[str, Any]:
         "lang": lang_norm,
         "site_name": SITE_BRAND,
         "title": copy["title"],
+        "head_title": head_title,
         "description": copy["description"],
         "keywords": copy["keywords"],
         "canonical": canonical,
@@ -1419,9 +1563,11 @@ def _pokemon_picker_options(lang: str, formatid: str = "") -> List[Dict[str, Any
     if _format_uses_champions_sheet(format_norm):
         raw = _champions_sheet_raw_data()
         localized_name_map = load_pokemon_localized_name_map(lang_norm)
-        poke_type_map = load_pokedex_type_map(os.environ.get("PKMETA_POKEDEX_JSON", ""))
+        pokedex_json_path = os.environ.get("PKMETA_POKEDEX_JSON", "")
+        poke_type_map = load_pokedex_type_map(pokedex_json_path)
+        identity_map = load_pokedex_identity_map(pokedex_json_path)
         options: List[Dict[str, Any]] = []
-        for key in raw.get("used_keys", ()): 
+        for key in raw.get("used_keys", ()):
             name = str(raw.get("pokemon_names", {}).get(key) or key)
             localized_name = localized_name_map.get(key, localized_name_map.get(_to_id(name), name))
             options.append(
@@ -1429,7 +1575,7 @@ def _pokemon_picker_options(lang: str, formatid: str = "") -> List[Dict[str, Any
                     "key": key,
                     "name": name,
                     "localized_name": localized_name,
-                    "types": poke_type_map.get(key, []),
+                    "types": _champions_lookup_map_value(poke_type_map, key, name, identity_map, []),
                     "sprite_urls": sprite_urls(key, name),
                 }
             )
@@ -1794,7 +1940,14 @@ def _champions_home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
     footer_copy = _footer_copy_for_lang(lang)
     raw = _champions_sheet_raw_data()
     team_count = int(raw.get("team_count") or 0)
-    champions_limit = team_count if team_count > 0 else DEFAULT_HOME_LIMIT
+    champions_limit = max(team_count, len(CHAMPIONS_ALLOWED_POKEMON_KEY_LIST), DEFAULT_HOME_LIMIT)
+    speed = _champions_speed_payload(
+        formatid=SPECIAL_FORMAT_CHAMPIONS,
+        q="",
+        lang=lang,
+        selected_types=set(),
+        limit=champions_limit,
+    )
     teams = _champions_team_payload(
         formatid=SPECIAL_FORMAT_CHAMPIONS,
         q="",
@@ -1838,6 +1991,7 @@ def _champions_home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
         "min_games_display": "0",
         "limit": champions_limit,
         "limit_max": champions_limit,
+        "speed_rows": speed["items"],
         "rows": pokemon["items"],
         "attack_rows": items["items"],
         "team_rows": teams["items"],
@@ -1857,6 +2011,12 @@ def _champions_home_page_context(db_path: str, lang: str) -> Dict[str, Any]:
             "matches": team_count,
             "active_view": "teams",
             "champions_mode": True,
+            "speed": {
+                "min_games": 0,
+                "limit": champions_limit,
+                "preloaded": True,
+                "min_games_auto": True,
+            },
             "pokemon": {
                 "min_games": 0,
                 "sort": "games",
@@ -2890,6 +3050,25 @@ def make_app(
                 "items": items[:limit],
                 "meta": {"matches": matches, "min_games_default": min_games_default, "winrate_warning": winrate_warning},
             }
+        )
+
+    @app.get("/api/speed")
+    def api_speed():
+        formatid = (request.args.get("formatid", "all") or "all").strip().lower()
+        q = (request.args.get("q", "") or "").strip().lower()
+        lang = _normalize_lang(request.args.get("lang", "en") or "en")
+        selected_types = _parse_types_param(request.args.get("types", "") or "")
+        limit = clamp_int(request.args.get("limit", DEFAULT_HOME_LIMIT), 1, 2000)
+        if not _format_uses_champions_sheet(formatid):
+            return jsonify({"formatid": formatid, "elo_min": 0, "elo_max": 0, "items": [], "meta": {"matches": 0, "min_games_default": 0}})
+        return jsonify(
+            _champions_speed_payload(
+                formatid=formatid,
+                q=q,
+                lang=lang,
+                selected_types=selected_types,
+                limit=limit,
+            )
         )
 
     @app.get("/api/pokemon_options")
